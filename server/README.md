@@ -93,12 +93,31 @@ List providers with `configured`, `ready`, and `active` flags.
 ### `GET /api/calendars?provider=google`
 List calendars the account can read.
 
-### `GET /api/events?provider=local&calendarId=work&from=<ISO>&to=<ISO>`
-Events within a window (defaults: today → +7 days).
+### `GET /api/events?provider=local&calendarId=work&from=<ISO>&to=<ISO>&q=<text>`
+Events within a window (defaults: today → +7 days). `q` filters by
+title/description/location/category.
 
 ### `GET /api/availability?provider=&calendarId=&from=&to=&duration=30&granularity=15`
 Free slots. `duration` (minutes) is required; `granularity` defaults to 15.
 Each slot is `{ start, end, duration, provider, calendarId }`.
+
+Optional filters: `workDays=1-5`, `workStart=09:00`, `workEnd=17:00`,
+`timeZone=America/New_York`. A slot is only returned when it fits entirely
+inside the working-hours window on a working day, interpreted in `timeZone`
+(defaults to UTC).
+
+### `GET /api/reminders?provider=&calendarId=&from=&to=`
+Events whose reminder triggers fall inside the window (defaults to the next
+24 hours). Each event's `reminders` are concrete ISO trigger times.
+
+### `GET /api/export/ics?provider=local&calendarId=`
+Downloads the calendar as a `text/calendar` document (series masters keep their
+`RRULE`).
+
+### `POST /api/import/ics`
+Body: `{ "provider": "local", "calendarId": "work", "ics": "<text>" }`. Creates
+every VEVENT; an RRULE becomes a series master. Returns
+`{ "imported": N, "errors": [...], "events": [...] }`.
 
 ### `POST /api/conflicts`
 ```json
@@ -127,11 +146,13 @@ Returns `{ clear: bool, conflicts: [...] }`. Provide `end` instead of
 ```
 Creates the event and returns the normalized event with its provider id.
 
-### `PATCH /api/events/:eventId?provider=local&calendarId=work`
-Update an existing event. Body is the same shape as `/api/book`.
+### `PATCH /api/events/:eventId?provider=local&calendarId=work&scope=this`
+Update an existing event. Body is the same shape as `/api/book`. For recurring
+events, `scope` is `this` (default), `following`, or `all` — see the root
+README for how each provider supports them.
 
-### `DELETE /api/events/:eventId?provider=local&calendarId=work`
-Delete an event.
+### `DELETE /api/events/:eventId?provider=local&calendarId=work&scope=this`
+Delete an event. Same `scope` semantics as `PATCH`.
 
 ## Normalized event model
 
@@ -148,7 +169,9 @@ Every provider's events are mapped to:
   "start": "2026-08-17T09:00:00Z",
   "end": "2026-08-17T09:30:00Z",
   "allDay": false,
-  "attendees": ["a@example.com"]
+  "attendees": ["a@example.com"],
+  "category": "optional free-form label",
+  "reminders": [15, 60]
 }
 ```
 

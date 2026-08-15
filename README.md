@@ -87,12 +87,19 @@ AI Calendar is that interface:
 ### Interrogation API (`server/`)
 
 - **Normalized events** — `{ id, provider, calendarId, title, description,
-  location, start, end, allDay, attendees }` (ISO 8601 UTC).
+  location, start, end, allDay, attendees, category, reminders }` (ISO 8601 UTC).
 - **Recurring events, expanded** — series are returned as one concrete instance
   per occurrence (with `recurringEventId` + `originalStart`), so availability and
   conflict checks are correct for every occurrence, not just the first.
+- **Series-scoped edits** — `PATCH`/`DELETE` accept `scope=this|following|all`,
+  so one occurrence, the rest of the series, or everything can be changed.
 - **Availability engine** — finds every free slot of a requested duration inside
-  a window, with configurable slot granularity.
+  a window, with configurable slot granularity, working hours (`workDays` /
+  `workStart` / `workEnd`), and an IANA `timeZone` to interpret them in.
+- **Search & reminders** — `?q=` filters events by title/description/location/
+  category; `/api/reminders` lists events whose reminders fire in a window.
+- **ICS import/export** — `POST /api/import/ics` and `GET /api/export/ics`
+  round-trip events (RRULEs preserved as series masters).
 - **Server-side conflict detection** — `POST /api/conflicts` is authoritative,
   so assistants and the UI can't disagree.
 - **Provider registry** — `local`, `google`, `outlook`, `caldav` implement one
@@ -335,10 +342,11 @@ Same provider list as `/health`, without the status field.
 }
 ```
 
-### `GET /api/events?provider=local&from=<ISO>&to=<ISO>&calendarId=`
+### `GET /api/events?provider=local&from=<ISO>&to=<ISO>&calendarId=&q=`
 
 Lists normalized events overlapping `[from, to)`. `from`/`to` default to today →
-+7 days.
++7 days. `q` (optional) filters to events whose title, description, location, or
+category contains the text (case-insensitive).
 
 ```json
 {
@@ -348,7 +356,7 @@ Lists normalized events overlapping `[from, to)`. `from`/`to` default to today �
       "id": "c1a8...", "provider": "local", "calendarId": "work",
       "title": "Team sync", "description": "", "location": "",
       "start": "2026-08-18T09:00:00.000Z", "end": "2026-08-18T09:30:00.000Z",
-      "allDay": false, "attendees": []
+      "allDay": false, "attendees": [], "category": "team", "reminders": [15]
     }
   ]
 }
@@ -359,6 +367,13 @@ Lists normalized events overlapping `[from, to)`. `from`/`to` default to today �
 Finds free slots of exactly `duration` minutes, sampled every `granularity`
 minutes (default 15). `duration` is required.
 
+Working-hours and timezone filters are optional:
+- `workDays=1-5` (or `0,6`) — which weekdays count (0=Sunday..6=Saturday).
+- `workStart=09:00` / `workEnd=17:00` — the local wall-clock window. A slot is
+  only free if it fits entirely inside.
+- `timeZone=America/New_York` — an IANA zone the window is interpreted in;
+  defaults to UTC.
+
 ```json
 {
   "provider": "local", "from": "...", "to": "...", "duration": 30, "count": 84,
@@ -367,6 +382,28 @@ minutes (default 15). `duration` is required.
   ]
 }
 ```
+
+### `GET /api/reminders?provider=local&from=<ISO>&to=<ISO>&calendarId=`
+
+Lists events whose reminder triggers fall inside `[from, to)` (defaults to the
+next 24 hours). Each returned event carries `reminders` as the concrete trigger
+times (ISO 8601) for the occurrences in the window. Events without reminders are
+never listed. Reminders are stored as minutes before start and are copied onto
+every occurrence of a recurring series.
+
+### `GET /api/export/ics?provider=local&calendarId=`
+
+Downloads the calendar as a `text/calendar` document. Series masters are written
+with their `RRULE`, so a recurring event round-trips as a rule. If the provider
+cannot produce masters (e.g. Google/Outlook), the expanded instances are written
+as ordinary VEVENTs.
+
+### `POST /api/import/ics`
+
+Body: `{ "provider": "local", "calendarId": "work", "ics": "<document text>" }`.
+Every VEVENT in the document is created on the target calendar; a VEVENT with an
+`RRULE` becomes a series master. Malformed components are skipped and reported
+in `errors`. Response: `{ "imported": N, "errors": [...], "events": [...] }`.
 
 ### `POST /api/conflicts`
 
@@ -402,15 +439,28 @@ Creates an event. Returns `201`.
 { "booked": true, "event": { "id": "...", ... } }
 ```
 
-### `PATCH /api/events/:eventId?provider=local&calendarId=`
+### `PATCH /api/events/:eventId?provider=local&calendarId=&scope=this`
 
 Updates an event. The body is the full event shape (same fields as `book`).
 
-### `DELETE /api/events/:eventId?provider=local`
+For recurring events, `scope` picks the blast radius:
+- `this` (default) — the single occurrence whose id you passed (stored as an
+  exception; the rest of the series is untouched).
+- `following` — the occurrence and everything after it (the series is split at
+  that point into a new series).
+- `all` — the whole series (pass the series id).
+
+Google/Outlook support `this` and `all` (their ids are real API ids).
+`following` is rejected there, and CalDAV only supports `all`.
+
+### `DELETE /api/events/:eventId?provider=local&scope=this`
 
 ```json
-{ "deleted": true, "provider": "local" }
+{ "deleted": true, "provider": "local", "scope": "this" }
 ```
+
+Same `scope` semantics as `PATCH`; `following` truncates the series instead of
+splitting it.
 
 ### `GET /api/auth/:provider` · `GET /api/auth/:provider/callback`
 
@@ -541,10 +591,13 @@ To **create** a recurring event, pass a `recurrence` rule to `POST /api/book`
 
 An invalid rule is rejected with `bad_request` at write time.
 
-> **Not yet supported:** editing or deleting a *series*. `PATCH`/`DELETE` act on
-> a single id, and the blast radius differs by provider (Google affects one
-> occurrence; CalDAV removes the whole `.ics` resource). Series-scoped edits
-> ("this / this and following / all") are still on the roadmap.
+Editing and deleting a series is scoped through the `scope` query parameter on
+`PATCH`/`DELETE` (see the endpoint docs above): pass an instance id with
+`scope=this` to change one occurrence, `scope=following` to change it and all
+later ones (the series is split into two), or the series id with `scope=all` to
+touch everything. The local provider stores single-occurrence changes as
+exceptions on the master; Google/Outlook handle them natively; CalDAV only
+supports whole-series writes.
 
 ---
 
@@ -564,11 +617,12 @@ An invalid rule is rejected with `bad_request` at write time.
 
 ## Roadmap
 
-- [x] Recurring events (RRULE) — **read/expand + create**; series-scoped edit
-      and delete ("this / this and following / all") still to do
-- [ ] Timezones & working hours
-- [ ] Reminders, categories, and search
-- [ ] ICS import/export
+- [x] Recurring events (RRULE) — **read/expand + create**, plus series-scoped
+      edit and delete ("this / this and following / all")
+- [x] Timezones & working hours (availability `workDays` / `workStart` /
+      `workEnd` / `timeZone`)
+- [x] Reminders, categories, and search (`/api/reminders`, `category`, `?q=`)
+- [x] ICS import/export (`/api/import/ics`, `/api/export/ics`)
 - [ ] Docker image
 - [ ] Refresh-token rotation for long-running assistants
 

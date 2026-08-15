@@ -29,6 +29,26 @@ export function parseEventBody(body) {
     : []
   const allDay = Boolean(body.allDay)
 
+  const category = typeof body.category === 'string' ? body.category.trim() : ''
+  if (category.length > 50) throw badRequest('"category" must be 50 characters or fewer.')
+
+  const reminders = []
+  if (body.reminders !== undefined && body.reminders !== null) {
+    if (!Array.isArray(body.reminders)) {
+      throw badRequest('"reminders" must be an array of minutes-before-start offsets.')
+    }
+    if (body.reminders.length > 10) throw badRequest('"reminders" may have at most 10 entries.')
+    for (const r of body.reminders) {
+      if (!Number.isInteger(r) || r < 0) {
+        throw badRequest('"reminders" entries must be non-negative integers (minutes before start).')
+      }
+      reminders.push(r)
+    }
+    if (new Set(reminders).size !== reminders.length) {
+      throw badRequest('"reminders" entries must be distinct.')
+    }
+  }
+
   const event = {
     title,
     description,
@@ -38,6 +58,8 @@ export function parseEventBody(body) {
     start: start.toISOString(),
     end: end.toISOString(),
   }
+  if (category) event.category = category
+  if (reminders.length) event.reminders = reminders.sort((a, b) => b - a)
 
   // Recurrence is optional. Validate it here rather than at expansion time so a
   // malformed rule is a 400 at write time, not a silently non-recurring event.

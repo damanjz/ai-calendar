@@ -294,3 +294,28 @@ test('a non-recurring booking is unchanged by the recurrence feature', async () 
 
   await call(`/api/events/${created.body.event.id}?provider=local&calendarId=work`, { method: 'DELETE', headers: KEY })
 })
+
+// ---------------------------------------------------------------------------
+// Working hours + timezone over HTTP
+// ---------------------------------------------------------------------------
+
+test('availability honours workDays/workStart/workEnd query params', async () => {
+  // 2031-09-01 is a Monday. Restrict to weekdays 09:00-17:00 UTC.
+  const qs = 'provider=local&calendarId=work&from=2031-09-05T00:00:00Z&to=2031-09-07T00:00:00Z&duration=60&granularity=60'
+  const withHours = await call(`/api/availability?${qs}&workDays=5&workStart=09:00&workEnd=17:00`, { headers: KEY })
+  assert.equal(withHours.status, 200)
+  const starts = withHours.body.slots.map((s) => s.start)
+  assert.equal(starts[0], '2031-09-05T09:00:00.000Z')
+  assert.equal(starts.at(-1), '2031-09-05T16:00:00.000Z')
+  assert.equal(starts.some((s) => s.startsWith('2031-09-06T')), false, 'Saturday must be excluded')
+})
+
+test('availability rejects a bad timezone or clock format', async () => {
+  const base = 'provider=local&calendarId=work&from=2031-09-01T00:00:00Z&to=2031-09-02T00:00:00Z&duration=30'
+  const badTz = await call(`/api/availability?${base}&timeZone=Mars/Olympus`, { headers: KEY })
+  assert.equal(badTz.status, 400)
+  assert.match(badTz.body.error.message, /IANA/)
+  const badClock = await call(`/api/availability?${base}&workStart=9am`, { headers: KEY })
+  assert.equal(badClock.status, 400)
+  assert.match(badClock.body.error.message, /HH:MM/)
+})

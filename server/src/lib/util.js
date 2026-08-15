@@ -50,8 +50,13 @@ export function intervalsOverlap(aStart, aEnd, bStart, bEnd) {
 /**
  * Sorts events by start and computes free windows inside [from, to).
  * Produces slots of exactly `duration` minutes, advancing by `granularity`.
+ *
+ * Optional `workingHours` ({ days: [0-6...], start, end }) restricts slots to
+ * the given local wall-clock window on the given days. When `timeZone` (an IANA
+ * name) is provided the local day/time is interpreted there; otherwise the
+ * slot's UTC day/time is used.
  */
-export function findFreeSlots(events, { from, to, duration, granularity = 15 }) {
+export function findFreeSlots(events, { from, to, duration, granularity = 15, timeZone, workingHours }) {
   const windowStart = new Date(from).getTime()
   const windowEnd = new Date(to).getTime()
   const slotMs = minutesToMs(duration)
@@ -72,13 +77,110 @@ export function findFreeSlots(events, { from, to, duration, granularity = 15 }) 
 
   while (cursor + slotMs <= windowEnd) {
     const candidateEnd = cursor + slotMs
-    const collides = busy.some((b) => b.start < candidateEnd && b.end > cursor)
-    if (!collides) {
-      slots.push({ start: toIso(cursor), end: toIso(candidateEnd) })
+    if (!workingHours || withinWorkingHours(cursor, candidateEnd, timeZone, workingHours)) {
+      const collides = busy.some((b) => b.start < candidateEnd && b.end > cursor)
+      if (!collides) {
+        slots.push({ start: toIso(cursor), end: toIso(candidateEnd) })
+      }
     }
     cursor += step
   }
   return slots
+}
+
+/** True when [startMs, endMs) falls inside a working-hours window in `timeZone`. */
+function withinWorkingHours(startMs, endMs, timeZone, { days, start, end }) {
+  const s = localWallClock(startMs, timeZone)
+  const e = localWallClock(endMs, timeZone)
+  if (!days.includes(s.day)) return false
+  if (s.day !== e.day) return false
+  return s.minutes >= start && e.minutes <= end
+}
+
+/** The local wall-clock day (0=Sunday) and minutes-of-day at `ms` in `timeZone`. */
+export function localWallClock(ms, timeZone) {
+  if (timeZone) {
+    const p = zonedParts(ms, timeZone)
+    const day = new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay()
+    return { day, minutes: p.hour * 60 + p.minute }
+  }
+  const d = new Date(ms)
+  return { day: d.getUTCDay(), minutes: d.getUTCHours() * 60 + d.getUTCMinutes() }
+}
+
+/**
+ * Parses working-hours query parameters:
+ *   workDays  "1-5" or "1,2,3,4" (0=Sunday..6=Saturday)
+ *   workStart "09:00"
+ *   workEnd   "17:00"
+ *   timeZone  "America/New_York"
+ * Returns null when no working-hours param is given; throws `badRequest` on
+ * malformed input. `timeZone` may be set alone and is passed through for the
+ * day-of-week/time interpretation.
+ */
+export function parseWorkingHours({ timeZone, workDays, workStart, workEnd }) {
+  if (timeZone !== undefined && !isValidTimeZone(timeZone)) {
+    throw badRequest(`"timeZone" must be an IANA time zone, e.g. "America/New_York".`)
+  }
+  const hasAny = workDays !== undefined || workStart !== undefined || workEnd !== undefined
+  if (!hasAny) return null
+  const days = parseWorkDays(workDays ?? '1-5')
+  const start = parseClock(workStart ?? '09:00', 'workStart')
+  const end = parseClock(workEnd ?? '17:00', 'workEnd')
+  if (end <= start) throw badRequest('"workEnd" must be after "workStart".')
+  return { timeZone: timeZone || undefined, workingHours: { days, start, end } }
+}
+
+function parseWorkDays(raw) {
+  const out = new Set()
+  for (const part of String(raw).split(',')) {
+    const m = part.trim().match(/^(\d)(?:-(\d))?$/)
+    if (!m) throw badRequest('"workDays" must use day numbers 0 (Sunday) to 6 (Saturday), e.g. "1-5".')
+    const lo = Number(m[1])
+    const hi = Number(m[2] ?? m[1])
+    if (lo > 6 || hi > 6 || hi < lo) {
+      throw badRequest('"workDays" ranges must be within 0 (Sunday) to 6 (Saturday).')
+    }
+    for (let d = lo; d <= hi; d++) out.add(d)
+  }
+  if (out.size === 0) throw badRequest('"workDays" must list at least one day.')
+  return [...out]
+}
+
+function parseClock(raw, name) {
+  const m = String(raw).trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) throw badRequest(`"${name}" must be "HH:MM", e.g. "09:00".`)
+  const h = Number(m[1])
+  const min = Number(m[2])
+  if (h === 24 && min === 0) return 24 * 60 // end-of-day sentinel
+  if (h > 23 || min > 59) throw badRequest(`"${name}" must be a valid time.`)
+  return h * 60 + min
+}
+
+function isValidTimeZone(name) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: name }).format()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Breaks `ms` into local wall-clock parts in `timeZone` (or UTC when absent). */
+function zonedParts(ms, timeZone) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const parts = dtf.formatToParts(new Date(ms))
+  const get = (t) => Number(parts.find((p) => p.type === t)?.value)
+  return { year: get('year'), month: get('month'), day: get('day'), hour: get('hour'), minute: get('minute'), second: get('second') }
 }
 
 /** Returns events that overlap the proposed [start, end). */

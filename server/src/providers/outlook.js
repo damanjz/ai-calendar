@@ -187,7 +187,8 @@ export default class OutlookProvider extends CalendarProvider {
     return this.normalize(data, calendarId)
   }
 
-  async updateEvent({ calendarId, eventId, event }) {
+  async updateEvent({ calendarId, eventId, event, scope = 'this' }) {
+    this.assertScope(scope)
     const path = calendarId
       ? `/me/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`
       : `/me/events/${eventId}`
@@ -198,11 +199,26 @@ export default class OutlookProvider extends CalendarProvider {
     return this.normalize(data, calendarId)
   }
 
-  async deleteEvent({ calendarId, eventId }) {
+  async deleteEvent({ calendarId, eventId, scope = 'this' }) {
+    this.assertScope(scope)
     const path = calendarId
       ? `/me/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`
       : `/me/events/${eventId}`
     await this.graph(path, { method: 'DELETE' })
     return { deleted: true }
+  }
+
+  /**
+   * Microsoft Graph ids are real: an occurrence id edits one instance ("this"),
+   * the series master id edits the whole series ("all"). There is no
+   * single-call "this and following" in the API.
+   */
+  assertScope(scope) {
+    if (scope === 'following') {
+      throw badRequest('"following" is not supported by Microsoft Graph; use scope=this (occurrence) or scope=all (series).')
+    }
+    if (scope !== 'this' && scope !== 'all') {
+      throw badRequest('"scope" must be "this" or "all".')
+    }
   }
 }

@@ -10,7 +10,9 @@ import { findFreeSlots } from '../lib/util.js'
  *   start,   // ISO 8601
  *   end,     // ISO 8601
  *   allDay,  // bool
- *   attendees // [email, ...]
+ *   attendees, // [email, ...]
+ *   category,  // optional free-form label
+ *   reminders  // optional [minutesBeforeStart, ...]
  * }
  *
  * Recurring events are always returned EXPANDED: getEvents yields one concrete
@@ -58,20 +60,20 @@ export default class CalendarProvider {
     throw new Error('createEvent not implemented')
   }
 
-  /** Updates an event; returns the normalized updated event. @param {{calendarId?, eventId, event}} _args */
+  /** Updates an event; returns the normalized updated event. @param {{calendarId?, eventId, event, scope?}} _args */
   async updateEvent(_args) {
     throw new Error('updateEvent not implemented')
   }
 
-  /** Deletes an event. @param {{calendarId?, eventId}} _args */
+  /** Deletes an event. @param {{calendarId?, eventId, scope?}} _args */
   async deleteEvent(_args) {
     throw new Error('deleteEvent not implemented')
   }
 
   /** Computes free slots using the provider's own events. */
-  async getAvailability({ calendarId, from, to, duration, granularity = 15 }) {
+  async getAvailability({ calendarId, from, to, duration, granularity = 15, timeZone, workingHours }) {
     const events = await this.getEvents({ calendarId, from, to })
-    const slots = findFreeSlots(events, { from, to, duration, granularity })
+    const slots = findFreeSlots(events, { from, to, duration, granularity, timeZone, workingHours })
     return slots.map((s) => ({ ...s, duration, provider: this.id, calendarId }))
   }
 }

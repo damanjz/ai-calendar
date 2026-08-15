@@ -10,10 +10,13 @@ You can:
 
 - Discover which calendar providers are available and authenticated
 - List a provider's calendars
-- Read events in a time window
-- Find free time slots that fit a requested duration
+- Read events in a time window (with optional text search)
+- Find free time slots that fit a requested duration (optionally restricted to
+  working hours in a timezone)
 - Check whether a proposed time conflicts with existing events
-- Book, update, and delete appointments
+- Book, update, and delete appointments (including single-occurrence / rest-of-
+  series / whole-series scope for recurring events)
+- List upcoming reminders and import/export `.ics` files
 
 ## Conventions
 
@@ -75,6 +78,14 @@ GET /api/availability?provider=google&from=<window start>&to=<window end>&durati
 - If the user gives constraints ("this week", "after 5pm", "anytime Tuesday"),
   map them to `from`/`to` before calling.
 
+Working hours and timezone can narrow the results server-side:
+- `workDays=1-5` — which weekdays count (0=Sunday..6=Saturday, ranges allowed).
+- `workStart=09:00` / `workEnd=17:00` — the local wall-clock window; a slot is
+  only free when it fits entirely inside.
+- `timeZone=America/New_York` — an IANA zone the window is interpreted in
+  (defaults to UTC). Use the user's local zone so "working hours" means *their*
+  9-to-5, not UTC's.
+
 Recommend the earliest slot that fits the user's constraints. Present 2–3
 options rather than overwhelming the user with every slot.
 
@@ -120,6 +131,9 @@ slot. Never say "booked" unless the API returned `"booked": true`.
   full event body. Preserve `title` and attendees unless the user asks to change them.
 - **Cancel:** `DELETE /api/events/:eventId?provider=google`. Confirm with the user
   before deleting; report the result.
+- For events that are part of a repeating series (they carry `recurringEventId`),
+  add a `scope` query parameter to say how far the change reaches — see
+  "Recurring events" below.
 
 ## Recurring events
 
@@ -151,11 +165,51 @@ be told apart.
 An invalid rule is rejected with `bad_request`, so a malformed rule never
 silently produces a one-off event.
 
-⚠ **Editing and deleting a series is not yet supported.** `PATCH` and `DELETE`
-act on a single id, and what that means differs by provider — for Google it
-affects one occurrence, for CalDAV it removes the whole series. **Before
-changing or cancelling anything with a `recurringEventId`, tell the user it is
-part of a repeating series and ask what they want**, rather than guessing.
+**Editing or deleting a recurring event** is controlled by `scope` on `PATCH` /
+`DELETE /api/events/:eventId`:
+
+- `scope=this` (default) — changes just the occurrence whose id you pass
+  (`<seriesId>_<timestamp>`). The rest of the series is untouched.
+- `scope=following` — changes that occurrence and every later one. The local
+  provider splits the series at that point into a new series, so earlier
+  occurrences keep their old properties and later ones take the new ones.
+- `scope=all` — changes the whole series; pass the **series** id
+  (`recurringEventId`), not an occurrence id.
+
+**Always ask the user which scope they want** before editing or cancelling
+anything that carries a `recurringEventId`: "just this one, this and all
+following, or the whole series?" Never guess.
+
+Provider support for `scope`: `local` implements all three; Google and Outlook
+support `this` and `all` natively (their ids are real API ids); CalDAV supports
+only `all` (it rewrites the whole `.ics` resource). Unsupported scopes are
+rejected with `bad_request`, and `scope=following` on a bare series id is
+rejected too — it needs an occurrence id to know where to split.
+
+## Search, reminders, and categories
+
+- **Search:** add `&q=<text>` to `GET /api/events`. It filters by title,
+  description, location, and category (case-insensitive substring). Use it when
+  the user says "find the dentist appointment" or "when did I meet Sam?".
+- **Categories:** events may carry `category` (a short free-form label like
+  `team` or `health`). Preserve it on edits; filter with `?q=`.
+- **Reminders:** events may carry `reminders`, an array of minutes-before-start
+  offsets (e.g. `[15, 60]`). To answer "what do I have coming up soon?", call
+  `GET /api/reminders?provider=google&from=<now>&to=<+24h>`. Each listed event
+  has `reminders` as concrete ISO trigger times. Recurring events contribute
+  one trigger per occurrence. When the user says "remind me 30 minutes before",
+  pass `"reminders": [30]` on `POST /api/book`.
+
+## Import and export
+
+- **Export:** `GET /api/export/ics?provider=local&calendarId=` returns the
+  calendar as an `.ics` document you can hand the user for Google/Apple/Outlook
+  import. Series masters carry their `RRULE`.
+- **Import:** `POST /api/import/ics` with body
+  `{ "provider": "local", "calendarId": "work", "ics": "<document text>" }`
+  creates every VEVENT (an RRULE becomes a series master). Use it when the user
+  has an `.ics` file from another service and wants it in their calendar. The
+  response reports `imported` count and any skipped components in `errors`.
 
 ## Error handling
 

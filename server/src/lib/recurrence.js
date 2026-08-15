@@ -72,6 +72,14 @@ export function parseRecurrence(recurrence, dtstart) {
  *   - `recurringEventId` — the series it came from
  *   - `originalStart`    — this occurrence's own start
  * and no `recurrence`, since an instance is concrete rather than a rule.
+ *
+ * A recurring event may carry an `exceptions` map (local provider) keyed by
+ * the ISO basic occurrence start:
+ *   - `{ deleted: true }`   — that occurrence was cancelled (EXDATE semantics)
+ *   - an event object       — that occurrence was edited: it is emitted with
+ *     its own start/end/properties, but still linked to the series and given a
+ *     stable id derived from the ORIGINAL occurrence start so the client can
+ *     reconcile it against previous reads.
  */
 export function expandRecurring(events, { from, to }) {
   const windowStart = new Date(from)
@@ -90,7 +98,7 @@ export function expandRecurring(events, { from, to }) {
 
     if (!rule || Number.isNaN(dtstart.getTime())) {
       // Unparseable rule: fall back to the base event so time is still blocked.
-      const { recurrence: _ignored, ...base } = event
+      const { recurrence: _ignored, exceptions: _ex, ...base } = event
       out.push(base)
       continue
     }
@@ -107,7 +115,7 @@ export function expandRecurring(events, { from, to }) {
       let taken = 0
       occurrences = rule.between(lookBehind, windowEnd, true, () => ++taken <= MAX_INSTANCES_PER_SERIES)
     } catch {
-      const { recurrence: _ignored, ...base } = event
+      const { recurrence: _ignored, exceptions: _ex, ...base } = event
       out.push(base)
       continue
     }
@@ -118,10 +126,32 @@ export function expandRecurring(events, { from, to }) {
       // Drop occurrences that finish before the window opens.
       if (end <= windowStart) continue
 
-      const { recurrence: _ignored, ...base } = event
+      const occurrenceKey = basicIso(start)
+      const exception = event.exceptions?.[occurrenceKey]
+      if (exception?.deleted) continue
+
+      const { recurrence: _ignored, exceptions: _ex, ...base } = event
+
+      if (exception) {
+        const eStart = new Date(exception.start)
+        const eEnd = new Date(exception.end)
+        if (!Number.isNaN(eStart.getTime())) {
+          out.push({
+            ...base,
+            ...exception,
+            id: `${event.id}_${occurrenceKey}`,
+            start: eStart.toISOString(),
+            end: eEnd.toISOString(),
+            recurringEventId: event.id,
+            originalStart: start.toISOString(),
+          })
+        }
+        continue
+      }
+
       out.push({
         ...base,
-        id: `${event.id}_${basicIso(start)}`,
+        id: `${event.id}_${occurrenceKey}`,
         start: start.toISOString(),
         end: end.toISOString(),
         recurringEventId: event.id,
@@ -134,6 +164,6 @@ export function expandRecurring(events, { from, to }) {
 }
 
 /** 2031-06-09T09:00:00.000Z -> 20310609T090000Z (the iCalendar id form). */
-function basicIso(date) {
+export function basicIso(date) {
   return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
 }

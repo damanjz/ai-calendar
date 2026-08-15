@@ -242,7 +242,8 @@ export default class CalDavProvider extends CalendarProvider {
     }
   }
 
-  async updateEvent({ calendarId, eventId, event }) {
+  async updateEvent({ calendarId, eventId, event, scope = 'all' }) {
+    this.assertScope(scope)
     if (!eventId) throw badRequest('eventId is required to update a CalDAV event.')
     await this.putEvent(calendarId, eventId, event)
     return {
@@ -253,7 +254,8 @@ export default class CalDavProvider extends CalendarProvider {
     }
   }
 
-  async deleteEvent({ calendarId, eventId }) {
+  async deleteEvent({ calendarId, eventId, scope = 'all' }) {
+    this.assertScope(scope)
     const target = calendarId || this.urls()[0]
     const url = target.endsWith('/') ? `${target}${eventId}.ics` : `${target}/${eventId}.ics`
     const res = await fetch(url, {
@@ -264,5 +266,17 @@ export default class CalDavProvider extends CalendarProvider {
       throw providerError(`CalDAV delete failed for ${url} (${res.status}).`)
     }
     return { deleted: true }
+  }
+
+  /**
+   * CalDAV is a file-per-event protocol: a write replaces the whole .ics
+   * resource. That only maps to the whole series ("all"). Single-occurrence
+   * edits ("this") and splits ("following") need RECURRENCE-ID/EXDATE
+   * machinery that the plain PUT path cannot express, so they are rejected.
+   */
+  assertScope(scope) {
+    if (scope !== 'all') {
+      throw badRequest(`"${scope}" is not supported by CalDAV; use scope=all to edit the whole series resource.`)
+    }
   }
 }

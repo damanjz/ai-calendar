@@ -154,7 +154,8 @@ export default class GoogleProvider extends CalendarProvider {
     }
   }
 
-  async updateEvent({ calendarId, eventId, event }) {
+  async updateEvent({ calendarId, eventId, event, scope = 'this' }) {
+    this.assertScope(scope)
     try {
       const calendar = await this.client()
       const res = await calendar.events.update({
@@ -168,13 +169,28 @@ export default class GoogleProvider extends CalendarProvider {
     }
   }
 
-  async deleteEvent({ calendarId, eventId }) {
+  async deleteEvent({ calendarId, eventId, scope = 'this' }) {
+    this.assertScope(scope)
     try {
       const calendar = await this.client()
       await calendar.events.delete({ calendarId: calendarId || 'primary', eventId })
       return { deleted: true }
     } catch (err) {
       throw this.wrap(err, 'delete')
+    }
+  }
+
+  /**
+   * Google event ids are real: an instance id edits one occurrence ("this"),
+   * the master id edits the whole series ("all"). There is no single-call
+   * "this and following" in the API.
+   */
+  assertScope(scope) {
+    if (scope === 'following') {
+      throw badRequest('"following" is not supported by Google Calendar; use scope=this (occurrence) or scope=all (series).')
+    }
+    if (scope !== 'this' && scope !== 'all') {
+      throw badRequest('"scope" must be "this" or "all".')
     }
   }
 }
