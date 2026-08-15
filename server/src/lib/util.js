@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { ApiError, badRequest } from './errors.js'
 
 export function minutesToMs(mins) {
@@ -87,11 +88,27 @@ export function findConflicts(events, start, end) {
   )
 }
 
+/**
+ * Constant-time comparison of two secrets.
+ *
+ * A plain `!==` short-circuits on the first differing byte, which leaks the
+ * length of the matching prefix through response timing. Lengths are compared
+ * via a hash so that differing-length inputs stay constant-time too (and so
+ * timingSafeEqual never throws on a length mismatch).
+ */
+export function safeKeyEquals(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  if (a.length === 0 || b.length === 0) return false
+  const ha = crypto.createHash('sha256').update(a, 'utf8').digest()
+  const hb = crypto.createHash('sha256').update(b, 'utf8').digest()
+  return crypto.timingSafeEqual(ha, hb)
+}
+
 export function requireApiKey(req, apiKey) {
+  if (!apiKey) return
   const provided =
     req.header('x-api-key') || req.header('authorization')?.replace(/^Bearer\s+/i, '')
-  if (!apiKey) return
-  if (!provided || provided !== apiKey) {
+  if (!safeKeyEquals(provided, apiKey)) {
     throw new ApiError(401, 'unauthorized', 'Missing or invalid API key.')
   }
 }

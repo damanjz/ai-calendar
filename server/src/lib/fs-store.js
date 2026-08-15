@@ -24,6 +24,23 @@ export function writeJson(file, value) {
   fs.writeFileSync(file, JSON.stringify(value, null, 2))
 }
 
+/**
+ * Writes a file containing secrets with owner-only permissions (0600).
+ *
+ * The mode is applied on create AND via an explicit chmod, because an existing
+ * file keeps its original permissions. No-ops on platforms without POSIX modes.
+ */
+export function writeSecretJson(file, value) {
+  ensureDataDir()
+  fs.writeFileSync(file, JSON.stringify(value, null, 2), { mode: 0o600 })
+  try {
+    fs.chmodSync(file, 0o600)
+  } catch {
+    // Windows and some mounted filesystems don't support chmod; the file is
+    // still inside the git-ignored data dir.
+  }
+}
+
 export function readFile(file) {
   try {
     return fs.readFileSync(file, 'utf8')
