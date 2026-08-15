@@ -5,12 +5,42 @@ type: decisions
 tags:
   - project/ai-calendar
   - decisions
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # AI Calendar — Decisions
 
 > Append-only log of significant decisions. Newest first. Each entry: date, decision, why.
+
+## 2026-08-16 — Review feedback is delivered as failing tests, not prose
+Reviewing the other agent's `2351cc5`, each finding was pushed first as a **test written to fail**
+(`0fd0863`), with the intended behaviour in the assertion message; fixes followed (`583af5a`).
+**Why:** two agents working one repo can't rely on a review being read the same way twice. A failing
+test is unambiguous, runnable, and self-verifying — the other side can run `npm test`, see exactly
+what's wrong, and fix source rather than interpret an opinion. It also proves the finding is real
+before any fix is written.
+
+## 2026-08-16 — Paired limits derive from one exported constant
+`MAX_REMINDER_LEAD_MINUTES` (validate.js) drives the `/api/reminders` look-ahead;
+`MAX_ICS_BYTES` (ics.js) drives the JSON body limit in app.js.
+**Why:** both bugs fixed that day were fundamentally *two numbers that disagreed* — a route checking
+5 MB behind a parser capped at 1 MB, and a reminder window that didn't account for how far ahead a
+reminder can be set. Deriving one from the other makes the disagreement impossible rather than
+merely fixed.
+
+## 2026-08-16 — `getRawEvents` belongs on the contract, not duck-typed
+Export used `typeof provider.getRawEvents === 'function'` and silently fell back to an unbounded
+`getEvents` window for everything else.
+**Why:** feature-detection makes behaviour differ per provider with nothing declaring it. On the
+base class with a bounded default, every provider answers the same question and the fallback is
+documented where implementers will read it.
+
+## 2026-08-16 — Resolve the bind port once, derive redirect URIs from it
+`config.js` computed the port from `API_PORT || PORT` but built OAuth redirect URIs from `PORT`
+alone.
+**Why:** the two could disagree, and the only symptom is a live OAuth flow that redirects to a dead
+port after consent — a failure that looks like the provider's fault and costs real debugging time.
+Anything derived from the port must come from the same resolved value.
 
 ## 2026-08-15 — Recurrence expanded per-provider, not in a shared wrapper
 Each provider's `getEvents` returns series already expanded, rather than wrapping a shared expander around the call sites.

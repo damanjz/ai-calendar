@@ -5,16 +5,16 @@ type: reference
 tags:
   - project/ai-calendar
 created: 2026-08-15
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Where things live — AI Calendar file map
 
-Every artifact and its exact path, so nothing is lost or deleted by accident. Snapshot 2026-08-15. Verify against disk before treating as fact.
+Every artifact and its exact path, so nothing is lost or deleted by accident. Snapshot 2026-08-16. Verify against disk before treating as fact.
 
 ## Code (the repo)
 
-`G:\Claude Projects\ai-calendar\` — **published** at https://github.com/damanjz/ai-calendar (public, MIT). Branch `master`, 9 commits (PR #1 merged, merge commit `6d6e3b3`).
+`G:\Claude Projects\ai-calendar\` — **published** at https://github.com/damanjz/ai-calendar (public, MIT). Branch `master`, **17 commits** (PR #1 merged at `6d6e3b3`; latest `c70a870`).
 
 | Path | What |
 |------|------|
@@ -48,8 +48,9 @@ Every artifact and its exact path, so nothing is lost or deleted by accident. Sn
 | `src\seed.js` | resets local calendar to empty state |
 | `src\providers\` | `base.js` (contract), `local.js`, `google.js`, `outlook.js`, `caldav.js`, `index.js` (registry) |
 | `src\auth\store.js` | OAuth token storage, written `0600` |
-| `src\lib\` | `errors.js`, `util.js` (availability engine + `safeKeyEquals`), **`recurrence.js`** (RRULE expansion), `validate.js`, `fs-store.js` |
-| `test\` | 118 tests — `util`, `validate`, `providers`, `google-provider`, `remote-providers`, `recurrence`, `recurrence-providers`, `api` |
+| `src\lib\` | `errors.js`, `util.js` (availability engine, working hours, `safeKeyEquals`), **`recurrence.js`** (RRULE expansion), **`ics.js`** (import/export + `MAX_ICS_BYTES`), `validate.js` (+ `MAX_REMINDER_LEAD_MINUTES`), `fs-store.js` |
+| `test\` | **163 tests** across 13 files — `util`, `validate`, `config`, `providers`, `google-provider`, `remote-providers`, `recurrence`, `recurrence-providers`, `series-scope`, `ics`, `search-reminders`, `review-findings`, `api` |
+| `scripts\verify-live-provider.mjs` | **real-account harness** — `npm run verify:live -w server`. Not part of `npm test`; needs live credentials |
 | `docs\assistant-guide.md` | AI interrogation workflow docs (incl. the recurring-events section) |
 | `server\README.md` | server docs |
 
@@ -64,7 +65,7 @@ Every artifact and its exact path, so nothing is lost or deleted by accident. Sn
 
 | Path | What |
 |------|------|
-| `server\.env` | **real credentials go here** (not committed; template: `server\.env.example`) |
+| `server\.env` | **real credentials go here** (not committed; template: `server\.env.example`). Scaffolded 2026-08-16 with Google placeholders — **empty, no secrets in it yet**; git-ignored (verified) |
 | `server\.env.example` | template — provider creds + `CORS_ORIGIN` + `API_KEY` |
 
 ## Build / temp
@@ -81,9 +82,10 @@ Every artifact and its exact path, so nothing is lost or deleted by accident. Sn
 
 ## Notes
 
-- **Git state:** public at https://github.com/damanjz/ai-calendar, `master` = 9 commits (PR #1 merged). Commit/push only on Daman's word (standing git rule).
+- **Git state:** public at https://github.com/damanjz/ai-calendar, `master` = **17 commits**. Commit/push only on Daman's word (standing git rule).
 - **Run:** `API_PORT=3000 npm run dev` from `ai-calendar\` → API :3000 + UI :5173. Plain `PORT` can collide with the UI port.
-- **Test:** `npm test` (118) · `npm run test:coverage` (90.7%).
+- **Test:** `npm test` (163) · `npm run test:coverage` (92.2%) · `npm audit` (0 vulns).
+- **Live check:** `npm run verify:live -w server` — needs real credentials; see [[Status]] for the Google setup steps.
 - **Reset data:** `npm run seed` wipes events (calendars `work`/`personal` kept).
 - **Not yet configured:** Google/Outlook OAuth and CalDAV creds (only `local` provider active) — and **none of them has ever run against a real account**.
 

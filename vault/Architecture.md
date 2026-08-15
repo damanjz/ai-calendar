@@ -5,7 +5,7 @@ type: architecture
 tags:
   - project/ai-calendar
   - architecture
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Architecture — AI Calendar
@@ -33,10 +33,11 @@ Dev run: root `npm run dev` starts both via `concurrently`. Vite dev proxy forwa
 | Routes | `server/src/router.js` | All `/api/*` + `/health` + auth routes |
 | Providers | `server/src/providers/` | `base.js` (contract), `local.js`, `google.js`, `outlook.js`, `caldav.js`, `index.js` (registry) |
 | Auth | `server/src/auth/store.js` | OAuth token JSON storage, written `0600` |
-| Lib | `server/src/lib/` | `errors.js`, `util.js` (incl. `findFreeSlots`, `safeKeyEquals`), **`recurrence.js`**, `validate.js`, `fs-store.js` |
-| Config | `server/src/config.js` | env-driven (`.env.example` template) |
+| Lib | `server/src/lib/` | `errors.js`, `util.js` (`findFreeSlots`, working hours, `safeKeyEquals`), **`recurrence.js`**, **`ics.js`**, `validate.js`, `fs-store.js` |
+| Config | `server/src/config.js` | env-driven (`.env.example` template). Resolves the bind port **once**; OAuth redirect URIs derive from it |
 | Seed | `server/src/seed.js` | resets local calendar to empty state |
-| Tests | `server/test/` | `util`, `validate`, `providers`, `google-provider`, `remote-providers`, `recurrence`, `recurrence-providers`, `api` |
+| Tests | `server/test/` | 13 files — `util`, `validate`, `config`, `providers`, `google-provider`, `remote-providers`, `recurrence`, `recurrence-providers`, `series-scope`, `ics`, `search-reminders`, `review-findings`, `api` |
+| Live check | `server/scripts/verify-live-provider.mjs` | real-account harness (`npm run verify:live -w server`) — **not** part of `npm test` |
 | Data | `server/data/local-calendar.json` | `local` provider store (git-ignored) |
 
 `app.js` is split from `server.js` so tests can drive the **real** app on an ephemeral port without starting the production listener.
@@ -89,8 +90,35 @@ Key behaviors:
 4. Booking: modal → `/api/conflicts` → `/api/book` (or `PATCH` for edit).
 5. `local` provider reads/writes `server/data/local-calendar.json` on each request (no restart needed).
 
-## Verification (2026-08-15)
-- `npm test` — **118 tests, 0 failures**; `npm run test:coverage` — **90.7% lines** (`util.js` and `local.js` at 100%).
+## Series scope, working hours, ICS
+
+- **`scope=this|following|all`** on `PATCH`/`DELETE`. `local` implements all three: `this` stores a
+  per-occurrence exception, `following` splits the series (caps the old rule with `UNTIL`, re-anchors
+  a new master, partitions exceptions across the split point). Google/Outlook do `this` and `all`
+  natively; CalDAV only `all`. Unsupported scopes → `bad_request`.
+- **Working hours** — `workDays` / `workStart` / `workEnd` / `timeZone` on availability, with real
+  IANA handling via `Intl` rather than offset arithmetic.
+- **ICS** (`lib/ics.js`) — parsing via node-ical, serialisation by a small writer. Export is bounded
+  (±1 year by default) because an unbounded range is a full-history sweep of a remote API; `local`
+  ignores the window and exports its whole store so its export stays complete.
+
+## Paired limits
+
+Two constants each drive a second value, so the pair cannot drift:
+- `MAX_REMINDER_LEAD_MINUTES` (validate.js) → how far ahead `/api/reminders` looks for events whose
+  trigger falls in the window.
+- `MAX_ICS_BYTES` (ics.js) → the JSON body limit in app.js, so the route's own size check is what
+  fires rather than body-parser failing first.
+
+Both existed as bugs first: a route checking 5 MB behind a 1 MB parser, and a reminder window that
+ignored how far ahead a reminder can be set.
+
+## Verification (2026-08-16)
+- `npm test` — **163 tests, 0 failures**; `npm run test:coverage` — **92.2% lines** (`util.js` 100%,
+  `local.js` 97.9%, `recurrence.js` 97.6%). `npm audit` — **0 vulnerabilities**.
+
+### Earlier (2026-08-15)
+- `npm test` — 118 tests, 0 failures; **90.7% lines** (`util.js` and `local.js` at 100%).
 - `npm run lint` — 0/0 both workspaces.
 - `npm run build` — passes (client).
 - E2E through proxy — book → PATCH reschedule → DELETE all succeeded; `/api/availability` returns slots; data reset to 0 events.

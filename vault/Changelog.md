@@ -5,7 +5,7 @@ type: changelog
 tags:
   - project/ai-calendar
   - changelog
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Changelog — AI Calendar
@@ -57,3 +57,65 @@ updated: 2026-08-15
 - **Deliberately excluded:** series-scoped edit/delete — see [[Decisions]]. The assistant guide now tells the assistant to ask the user before touching anything with a `recurringEventId`.
 - 37 new tests (**118 total**). Verified in a browser: booked a real weekly series and confirmed the **third** occurrence was reported busy and withheld from availability — the exact case the old code got wrong.
 - **Shipped:** branch `harden-tests-and-security` (7 commits) pushed, **PR #1 opened and merged** into `master` (merge commit `6d6e3b3`, 29 files, +2472/−120).
+
+## 2026-08-15 — Series scope, working hours, ICS, search + reminders (`2351cc5`)
+
+Shipped from the other side of the collaboration (a second agent working the same repo).
+
+- **Series-scoped edit/delete** — `PATCH`/`DELETE` accept `scope=this|following|all`. `local`
+  implements all three: `this` stores a per-occurrence exception, `following` splits the series
+  (caps the old rule with `UNTIL`, re-anchors a new master, partitions exceptions across the split).
+  Google/Outlook support `this` and `all` natively; CalDAV only `all`.
+- **Working hours + timezone** on availability — `workDays` / `workStart` / `workEnd` / `timeZone`,
+  with real IANA handling via `Intl` rather than naive offset maths.
+- **ICS import/export** — `POST /api/import/ics`, `GET /api/export/ics`; RRULEs preserved as series
+  masters on round-trip.
+- **Search, categories, reminders** — `?q=` filters title/description/location/category;
+  `/api/reminders` lists events whose reminders fire in a window; both `category` and `reminders`
+  validated on write (≤10 entries, deduped, non-negative integers).
+- **Dependencies:** googleapis → 173, node-ical → 0.22. **`npm audit`: 0 vulnerabilities**, clearing
+  the transitive `uuid` findings previously written off as unfixable-without-a-breaking-major.
+- 154 tests passing at this commit.
+
+## 2026-08-16 — Review of `2351cc5`: three defects found and fixed
+
+Reviewed the incoming work, verified each finding by running it, and pushed **failing tests first**
+(`0fd0863`) so the intended behaviour was unambiguous, then the fixes (`583af5a`).
+
+- **HIGH — `/api/reminders` missed the reminders it exists to report.** It fetched events over the
+  *same* window as the trigger times, so a reminder due 09:00 for a 10:00 event was invisible to an
+  08:30–09:30 query — exactly the "what's coming up in the next 30 minutes?" case. Verified live
+  (`[]` vs 1 expected). **Fixed:** widens the event fetch by the largest permitted offset, then
+  filters triggers to `[from, to)`. That needs an upper bound to stay correct, so reminder offsets
+  are now capped at **28 days** on write, with both sides deriving from one exported
+  `MAX_REMINDER_LEAD_MINUTES`.
+- **MEDIUM — an oversized ICS returned `500 Internal server error`.** The route's 5 MB check was
+  unreachable: `express.json({limit:'1mb'})` rejected first and `entity.too.large` was untranslated.
+  **Fixed:** the JSON limit is derived from `MAX_ICS_BYTES` so the route's own check fires with a
+  message naming the ICS document, and anything past the parser ceiling returns
+  `413 payload_too_large`. Also measures **bytes** rather than JS string length, so multi-byte
+  content is bounded correctly.
+- **MEDIUM — ICS export requested an ~8000-year window.** `getRawEvents` was duck-typed, so
+  google/outlook/caldav fell back to `1970 → 9999` — a full-history sweep with no pagination guard,
+  where recurring series silently truncate at the expansion cap. **Fixed:** `getRawEvents` is on the
+  base contract with a bounded default; the route accepts `from`/`to` defaulting to ±1 year. `local`
+  still ignores the window and exports its whole store, so its export stays complete.
+
+## 2026-08-16 — OAuth redirect URI followed the wrong port (`c70a870`)
+
+Found while preparing the Google live test — before any credentials were involved.
+
+- `config.js` resolved the bind port from `API_PORT || PORT`, but **both** provider redirect URIs
+  were still built from `PORT` alone. With `API_PORT=3000` (what `npm run dev` sets) and no `PORT`,
+  the server listened on 3000 while Google/Microsoft were told to call back on 3000 *by luck*; with
+  `API_PORT=4000` consent would succeed and then redirect to a **dead port**. The failure appears
+  only in the live OAuth flow and reads like a provider problem.
+- **Fixed:** the port is resolved once and both redirect URIs derive from it. An explicit
+  `GOOGLE_REDIRECT_URI` / `OUTLOOK_REDIRECT_URI` still wins.
+- Added `test/config.test.js` — precedence rule, redirect/port agreement across `API_PORT` / `PORT` /
+  defaults, and the safe defaults (loopback bind, scoped CORS).
+- Added `server/scripts/verify-live-provider.mjs` (`npm run verify:live -w server`) — the real-account
+  harness: read-only checks first (calendars, normalized shape, series come back **expanded**,
+  availability never overlaps a real event), then create/read/move/delete in a **January 2038**
+  window, cleaned up afterwards. Nothing is written until the read-only checks pass.
+- **163 tests, 92.2% line coverage.**
