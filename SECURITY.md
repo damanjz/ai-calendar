@@ -24,7 +24,10 @@ You are leaving the design envelope. Do **all** of:
 1. Set a strong `API_KEY`.
 2. Set an explicit `CORS_ORIGIN` (never `*`).
 3. Put it behind TLS (a reverse proxy).
-4. Understand that OAuth token storage is **dev-grade single-user** — plaintext
+4. **Add a rate limiter** (at the proxy, or `express-rate-limit`). Per-request
+   work is bounded, but nothing caps request *volume* — that's fine on loopback,
+   not on a public interface.
+5. Understand that OAuth token storage is **dev-grade single-user** — plaintext
    JSON, not a multi-tenant secret store.
 
 The server refuses to pretend otherwise: a non-loopback bind with no `API_KEY`

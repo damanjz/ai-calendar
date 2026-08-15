@@ -14,8 +14,9 @@
 ![Node](https://img.shields.io/badge/Node-%3E%3D20-339933)
 ![React](https://img.shields.io/badge/React-19-61DAFB)
 ![Express](https://img.shields.io/badge/Express-5-000000)
-![Tests](https://img.shields.io/badge/Tests-163%20passing-2ea44f)
-![Coverage](https://img.shields.io/badge/Coverage-91.4%25-2ea44f)
+[![CI](https://github.com/damanjz/ai-calendar/actions/workflows/ci.yml/badge.svg)](https://github.com/damanjz/ai-calendar/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/Tests-177%20passing-2ea44f)
+![Coverage](https://img.shields.io/badge/Coverage-91%25-2ea44f)
 ![Audit](https://img.shields.io/badge/npm%20audit-0%20vulnerabilities-success)
 ![Providers](https://img.shields.io/badge/Providers-4-brightgreen)
 ![For](https://img.shields.io/badge/For-AI%20Assistants-8A2BE2)
@@ -536,16 +537,20 @@ ephemeral port without starting the production listener.
 ## 🧪 Tests
 
 ```bash
-npm test              # run everything (163 tests, all passing)
+npm test              # run everything (177 tests, all passing)
 npm run test:coverage # with a coverage report
 ```
+
+Every push and PR runs the full suite, lint, build, and `npm audit` on Node 20
+and 22 via [GitHub Actions](.github/workflows/ci.yml).
 
 The suite uses Node's built-in `node:test` — **no test-framework dependency**.
 It covers the availability engine's edge cases (enclosed, touching, zero-length
 and DST-crossing intervals), request validation, the local provider's full CRUD
 lifecycle, the Google/Outlook/CalDAV adapters against a stubbed transport, the
 HTTP layer end to end (auth, CORS, error envelope, book → conflict → delete),
-and series-scoped recurring edits plus ICS import/export.
+series-scoped recurring edits, ICS import/export, and a **security regression
+suite** (SSRF, DoS bounds, OAuth CSRF, injection — see [SECURITY.md](SECURITY.md)).
 
 There is also **`npm run verify:live -w server`** — an end-to-end check that
 exercises a **real** provider account (read-only checks first, then
@@ -616,6 +621,22 @@ later ones (the series is split into two), or the series id with `scope=all` to
 touch everything. The local provider stores single-occurrence changes as
 exceptions on the master; Google/Outlook handle them natively; CalDAV only
 supports whole-series writes.
+
+---
+
+## 💾 Storage & limits (the `local` provider)
+
+- **Durable writes.** The file store writes to a temp file and atomically
+  renames it over the target, so a crash or `Ctrl-C` mid-write leaves either the
+  old calendar intact or the new one complete — never a truncated, unreadable
+  store.
+- **Scaling ceiling.** The `local` provider reads and rewrites the entire
+  `local-calendar.json` on every mutation. That's ideal for a personal calendar
+  (hundreds of events) but is **O(n) per write** — not intended for tens of
+  thousands of events. For that scale, back it with a real provider or a
+  database-backed one.
+- **Not multi-writer.** It assumes a single server process. Two servers sharing
+  one data directory can clobber each other's writes; run one.
 
 ---
 

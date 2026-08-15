@@ -19,26 +19,47 @@ export function readJson(file, fallback) {
   }
 }
 
-export function writeJson(file, value) {
+/**
+ * Atomically writes `contents` to `file`: write to a temp file in the same
+ * directory, then rename over the target. rename(2) is atomic on the same
+ * filesystem, so a crash mid-write leaves EITHER the old file intact OR the new
+ * one complete — never a truncated store. Without this, a Ctrl-C or power loss
+ * during writeFileSync could corrupt local-calendar.json and lose every event.
+ */
+function writeFileAtomic(file, contents, options = {}) {
   ensureDataDir()
-  fs.writeFileSync(file, JSON.stringify(value, null, 2))
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`
+  try {
+    fs.writeFileSync(tmp, contents, options)
+    fs.renameSync(tmp, file)
+  } catch (err) {
+    try {
+      fs.rmSync(tmp, { force: true })
+    } catch {
+      // best-effort cleanup of the temp file
+    }
+    throw err
+  }
+  // An existing target keeps its original permissions through a rename, so
+  // re-assert the mode when one was requested (matters for 0600 secrets).
+  if (options.mode !== undefined) {
+    try {
+      fs.chmodSync(file, options.mode)
+    } catch {
+      // Windows / some mounted filesystems don't support chmod.
+    }
+  }
+}
+
+export function writeJson(file, value) {
+  writeFileAtomic(file, JSON.stringify(value, null, 2))
 }
 
 /**
- * Writes a file containing secrets with owner-only permissions (0600).
- *
- * The mode is applied on create AND via an explicit chmod, because an existing
- * file keeps its original permissions. No-ops on platforms without POSIX modes.
+ * Writes a file containing secrets atomically with owner-only permissions (0600).
  */
 export function writeSecretJson(file, value) {
-  ensureDataDir()
-  fs.writeFileSync(file, JSON.stringify(value, null, 2), { mode: 0o600 })
-  try {
-    fs.chmodSync(file, 0o600)
-  } catch {
-    // Windows and some mounted filesystems don't support chmod; the file is
-    // still inside the git-ignored data dir.
-  }
+  writeFileAtomic(file, JSON.stringify(value, null, 2), { mode: 0o600 })
 }
 
 export function readFile(file) {
@@ -50,6 +71,5 @@ export function readFile(file) {
 }
 
 export function writeFile(file, contents) {
-  ensureDataDir()
-  fs.writeFileSync(file, contents)
+  writeFileAtomic(file, contents)
 }
