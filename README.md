@@ -299,6 +299,10 @@ This is a **single-user, self-hosted** tool, and the defaults are chosen to matc
 If you expose this beyond localhost, set `API_KEY` **and** a specific
 `CORS_ORIGIN`, and put it behind TLS.
 
+The full trust model, the hardening verified by an adversarial audit, and the
+invariants contributors must not break are documented in
+**[SECURITY.md](SECURITY.md)**.
+
 ---
 
 ## 📚 API reference
