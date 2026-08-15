@@ -391,12 +391,17 @@ times (ISO 8601) for the occurrences in the window. Events without reminders are
 never listed. Reminders are stored as minutes before start and are copied onto
 every occurrence of a recurring series.
 
-### `GET /api/export/ics?provider=local&calendarId=`
+### `GET /api/export/ics?provider=local&calendarId=&from=<ISO>&to=<ISO>`
 
 Downloads the calendar as a `text/calendar` document. Series masters are written
 with their `RRULE`, so a recurring event round-trips as a rule. If the provider
 cannot produce masters (e.g. Google/Outlook), the expanded instances are written
 as ordinary VEVENTs.
+
+`from`/`to` default to **±1 year** around today. The bound matters for remote
+providers: an unbounded range is a full-history sweep of their API with no
+pagination guard, and recurring series truncate at the expansion cap. The `local`
+provider reads its whole store regardless, so its export is always complete.
 
 ### `POST /api/import/ics`
 

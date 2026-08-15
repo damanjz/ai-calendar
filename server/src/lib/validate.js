@@ -1,6 +1,16 @@
 import { badRequest } from './errors.js'
 import { parseRecurrence } from './recurrence.js'
 
+/**
+ * Largest reminder offset accepted on write: 28 days.
+ *
+ * This is the contract that lets `/api/reminders` stay correct with a bounded
+ * event fetch — it widens its window by exactly this much to catch events
+ * starting after `to` whose trigger falls inside it. Raising one without the
+ * other silently drops the longest reminders.
+ */
+export const MAX_REMINDER_LEAD_MINUTES = 28 * 24 * 60
+
 export function parseEventBody(body) {
   const title = typeof body.title === 'string' ? body.title.trim() : ''
   if (!title) throw badRequest('"title" is required.')
@@ -41,6 +51,14 @@ export function parseEventBody(body) {
     for (const r of body.reminders) {
       if (!Number.isInteger(r) || r < 0) {
         throw badRequest('"reminders" entries must be non-negative integers (minutes before start).')
+      }
+      // Bounded so /api/reminders knows how far ahead to look for events whose
+      // trigger falls inside the requested window. Without a ceiling the
+      // look-ahead would have to be unbounded to stay correct.
+      if (r > MAX_REMINDER_LEAD_MINUTES) {
+        throw badRequest(
+          `"reminders" entries must be at most ${MAX_REMINDER_LEAD_MINUTES} minutes (28 days) before the start.`,
+        )
       }
       reminders.push(r)
     }

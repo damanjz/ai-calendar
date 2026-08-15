@@ -194,11 +194,15 @@ rejected too — it needs an occurrence id to know where to split.
 - **Categories:** events may carry `category` (a short free-form label like
   `team` or `health`). Preserve it on edits; filter with `?q=`.
 - **Reminders:** events may carry `reminders`, an array of minutes-before-start
-  offsets (e.g. `[15, 60]`). To answer "what do I have coming up soon?", call
+  offsets (e.g. `[15, 60]`), at most 10 entries and at most 28 days (40320
+  minutes) each. To answer "what do I have coming up soon?", call
   `GET /api/reminders?provider=google&from=<now>&to=<+24h>`. Each listed event
   has `reminders` as concrete ISO trigger times. Recurring events contribute
   one trigger per occurrence. When the user says "remind me 30 minutes before",
   pass `"reminders": [30]` on `POST /api/book`.
+  The window matches **when the reminder fires**, not when the event starts — so
+  a 24-hour window correctly surfaces tomorrow's event if its reminder is due
+  today.
 
 ## Import and export
 

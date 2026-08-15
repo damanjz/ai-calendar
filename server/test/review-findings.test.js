@@ -71,7 +71,8 @@ test('reminders: a trigger inside the window is found even when the event is not
       'the route currently fetches events using the same window as the triggers, so "what is ' +
       'coming up in the next 30 minutes?" returns nothing',
   )
-  assert.equal(body.reminders[0].event.title, 'Dentist')
+  assert.equal(body.reminders[0].title, 'Dentist')
+  assert.equal(body.reminders[0].reminders[0], '2031-06-02T09:00:00.000Z')
 
   await call(`/api/events/${created.body.event.id}?provider=local&calendarId=work`, { method: 'DELETE' })
 })
@@ -80,23 +81,31 @@ test('reminders: a trigger inside the window is found even when the event is not
 // 2. MEDIUM — an oversized ICS returns 500 instead of a clean 4xx
 // ---------------------------------------------------------------------------
 
-test('import: an oversized ICS body fails cleanly, not as an internal error', async () => {
-  // The route checks `ics.length > 5_000_000`, but express.json({limit:'1mb'})
-  // rejects first and its entity.too.large error is not translated, so the
-  // client sees a 500 with no usable message.
+test('import: an ICS over the 5MB limit is rejected by the route, with a specific message', async () => {
+  // Must reach the route's own check (not body-parser), so the caller is told
+  // it was the ICS document that was too large.
   const { status, body } = await call('/api/import/ics', {
     method: 'POST',
-    body: JSON.stringify({ provider: 'local', calendarId: 'work', ics: 'X'.repeat(1_500_000) }),
+    body: JSON.stringify({ provider: 'local', calendarId: 'work', ics: 'X'.repeat(5_000_001) }),
   })
 
-  assert.notEqual(status, 500, 'an oversized body must not surface as an internal server error')
-  assert.ok(status === 400 || status === 413, `expected 400 or 413, got ${status}`)
-  assert.ok(body?.error?.code, 'must use the standard error envelope')
-  assert.match(
-    body.error.message,
-    /large|size|limit/i,
-    'the message should tell the caller the document was too large',
-  )
+  assert.notEqual(status, 500, 'an oversized document must not surface as an internal server error')
+  assert.equal(status, 400)
+  assert.equal(body.error.code, 'bad_request')
+  assert.match(body.error.message, /ICS document is too large/i)
+})
+
+test('import: a body past the JSON limit returns 413, not 500', async () => {
+  // Beyond the body-parser ceiling the route never runs. That path previously
+  // returned an untranslated 500 with nothing actionable.
+  const { status, body } = await call('/api/import/ics', {
+    method: 'POST',
+    body: JSON.stringify({ provider: 'local', calendarId: 'work', ics: 'X'.repeat(8_000_000) }),
+  })
+
+  assert.equal(status, 413, 'body-parser rejections must be translated, not surfaced as 500')
+  assert.equal(body.error.code, 'payload_too_large')
+  assert.match(body.error.message, /too large/i)
 })
 
 // ---------------------------------------------------------------------------

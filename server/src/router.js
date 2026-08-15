@@ -2,10 +2,13 @@ import crypto from 'node:crypto'
 import { Router } from 'express'
 import config from './config.js'
 import { getProvider, listProviders } from './providers/index.js'
-import { parseEventBody, parseConflictBody } from './lib/validate.js'
+import { parseEventBody, parseConflictBody, MAX_REMINDER_LEAD_MINUTES } from './lib/validate.js'
 import { requireApiKey, assertPositiveInt, parseWorkingHours } from './lib/util.js'
-import { eventsToIcs, parseIcs } from './lib/ics.js'
+import { eventsToIcs, parseIcs, MAX_ICS_BYTES } from './lib/ics.js'
 import { badRequest, notFound } from './lib/errors.js'
+
+/** Default half-window for ICS export when the caller gives no from/to: ±1 year. */
+const EXPORT_DEFAULT_DAYS = 365
 
 export function createRouter() {
   const router = Router()
@@ -93,10 +96,15 @@ export function createRouter() {
     if (new Date(to) <= new Date(from)) {
       throw badRequest('"to" must be after "from".')
     }
+    // A reminder fires BEFORE its event, so an event starting after `to` can
+    // still have a trigger inside the window. Widen the event fetch by the
+    // largest supported offset, then filter triggers to [from, to) below —
+    // otherwise "what's coming up in the next 30 minutes?" finds nothing.
+    const lookAhead = new Date(new Date(to).getTime() + MAX_REMINDER_LEAD_MINUTES * 60_000).toISOString()
     const events = await provider.getEvents({
       calendarId: req.query.calendarId || undefined,
       from,
-      to,
+      to: lookAhead,
     })
     const fromMs = new Date(from).getTime()
     const toMs = new Date(to).getTime()
@@ -201,10 +209,18 @@ export function createRouter() {
   router.get('/api/export/ics', async (req, res) => {
     const provider = getProvider(req.query.provider)
     const calendarId = req.query.calendarId || undefined
-    const events =
-      typeof provider.getRawEvents === 'function'
-        ? await provider.getRawEvents({ calendarId })
-        : await provider.getEvents({ calendarId, from: '1970-01-01T00:00:00Z', to: '9999-12-31T23:59:59Z' })
+    // Bounded by default: an unbounded range is a full-history sweep of a
+    // remote API, and recurring series silently truncate at the expansion cap.
+    // Callers wanting more can pass an explicit from/to.
+    const from = req.query.from || addDays(startOfToday(), -EXPORT_DEFAULT_DAYS)
+    const to = req.query.to || addDays(startOfToday(), EXPORT_DEFAULT_DAYS)
+    if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) {
+      throw badRequest('"from" and "to" must be valid ISO 8601 date-times.')
+    }
+    if (new Date(to) <= new Date(from)) {
+      throw badRequest('"to" must be after "from".')
+    }
+    const events = await provider.getRawEvents({ calendarId, from, to })
     const text = eventsToIcs(events)
     res.set('Content-Type', 'text/calendar; charset=utf-8')
     res.set('Content-Disposition', `attachment; filename="calendar-${provider.id}.ics"`)
@@ -220,8 +236,8 @@ export function createRouter() {
     if (typeof req.body.ics !== 'string' || !req.body.ics.trim()) {
       throw badRequest('"ics" must contain the iCalendar document as text.')
     }
-    if (req.body.ics.length > 5_000_000) {
-      throw badRequest('The ICS document is too large (5 MB limit).')
+    if (Buffer.byteLength(req.body.ics, 'utf8') > MAX_ICS_BYTES) {
+      throw badRequest(`The ICS document is too large (${MAX_ICS_BYTES / 1_000_000} MB limit).`)
     }
     const { events, errors } = await parseIcs(req.body.ics)
     if (!events.length) {

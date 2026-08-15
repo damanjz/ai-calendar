@@ -59,7 +59,13 @@ export default class LocalProvider extends CalendarProvider {
       .map((e) => ({ ...e, provider: this.id }))
   }
 
-  /** Raw stored events (series masters, unexpanded) for export. */
+  /**
+   * Raw stored events (series masters, unexpanded) for export.
+   *
+   * `from`/`to` are ignored deliberately: the whole store is local and cheap to
+   * read, and a series master must be exported with its RRULE intact even when
+   * its DTSTART falls outside the requested window.
+   */
   async getRawEvents({ calendarId }) {
     const { events } = this.load()
     const scoped = events.filter((e) => !calendarId || e.calendarId === calendarId)

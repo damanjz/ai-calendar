@@ -70,6 +70,25 @@ export default class CalendarProvider {
     throw new Error('deleteEvent not implemented')
   }
 
+  /**
+   * Events as stored, for export: series masters with their rule intact rather
+   * than expanded occurrences.
+   *
+   * Part of the contract so callers never have to feature-detect it. The
+   * default satisfies it for providers that can only answer a windowed query
+   * (google, outlook, caldav) by reading a bounded range — exporting those
+   * yields expanded instances, which still round-trips, just without the RRULE.
+   *
+   * `from`/`to` are required: an unbounded range is a full-history sweep of a
+   * remote API with no pagination guard, and recurring series silently truncate
+   * at the expansion cap.
+   *
+   * @param {{calendarId?, from, to}} args
+   */
+  async getRawEvents({ calendarId, from, to }) {
+    return this.getEvents({ calendarId, from, to })
+  }
+
   /** Computes free slots using the provider's own events. */
   async getAvailability({ calendarId, from, to, duration, granularity = 15, timeZone, workingHours }) {
     const events = await this.getEvents({ calendarId, from, to })

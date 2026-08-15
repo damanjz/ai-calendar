@@ -8,6 +8,15 @@
 import ical from 'node-ical'
 import crypto from 'node:crypto'
 
+/**
+ * Largest ICS document accepted on import.
+ *
+ * The JSON body limit in app.js is derived from this so that the route's own
+ * size check is what rejects an oversized document — with a message naming ICS
+ * — rather than body-parser failing first with a generic error.
+ */
+export const MAX_ICS_BYTES = 5_000_000
+
 /** The iCalendar basic form of a Date: 2031-06-09T09:00:00Z -> 20310609T090000Z. */
 function basicIso(date) {
   return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')

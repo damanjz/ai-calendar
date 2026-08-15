@@ -3,6 +3,14 @@ import config from './config.js'
 import { createRouter } from './router.js'
 import { ensureDataDir } from './lib/fs-store.js'
 import { ApiError } from './lib/errors.js'
+import { MAX_ICS_BYTES } from './lib/ics.js'
+
+/**
+ * JSON body ceiling. Sized above the ICS import limit so that route's own
+ * size check is the one that fires, with a specific message — previously the
+ * body-parser limit (1mb) rejected first and the 5MB check was dead code.
+ */
+const MAX_JSON_BODY = `${Math.ceil((MAX_ICS_BYTES * 1.4) / 1_000_000)}mb`
 
 /**
  * Builds the Express app without binding a port, so tests can drive it over
@@ -13,7 +21,7 @@ export function createApp() {
 
   const app = express()
   app.disable('x-powered-by')
-  app.use(express.json({ limit: '1mb' }))
+  app.use(express.json({ limit: MAX_JSON_BODY }))
 
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', config.corsOrigin)
@@ -43,6 +51,17 @@ export function createApp() {
     }
     if (err?.type === 'entity.parse.failed') {
       res.status(400).json({ error: { code: 'bad_request', message: 'Invalid JSON body.' } })
+      return
+    }
+    // body-parser rejects oversized bodies before any route runs. Untranslated
+    // this surfaced as a 500 "Internal server error" with nothing actionable.
+    if (err?.type === 'entity.too.large') {
+      res.status(413).json({
+        error: {
+          code: 'payload_too_large',
+          message: `Request body is too large (limit ${MAX_JSON_BODY}).`,
+        },
+      })
       return
     }
     console.error(err)
