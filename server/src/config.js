@@ -5,10 +5,15 @@ function bool(value, fallback = false) {
 
 const host = process.env.HOST || '127.0.0.1'
 
+// API_PORT wins over PORT: some hosts inject PORT to mean "the port for the
+// app being launched", which would otherwise make the API steal the UI's port.
+// Resolved once so the OAuth redirect URIs below cannot disagree with the port
+// the server actually binds — a mismatch sends Google/Microsoft to a dead port
+// after consent, which fails confusingly and only in the live flow.
+const port = Number(process.env.API_PORT || process.env.PORT || 3000)
+
 const config = {
-  // API_PORT wins over PORT: some hosts inject PORT to mean "the port for the
-  // app being launched", which would otherwise make the API steal the UI's port.
-  port: Number(process.env.API_PORT || process.env.PORT || 3000),
+  port,
   // Bind to loopback by default: this is a single-user self-hosted tool, and
   // binding 0.0.0.0 with an empty API_KEY would expose every route.
   host,
@@ -26,7 +31,7 @@ const config = {
     clientId: process.env.GOOGLE_CLIENT_ID || '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     redirectUri:
-      process.env.GOOGLE_REDIRECT_URI || `http://localhost:${process.env.PORT || 3000}/api/auth/google/callback`,
+      process.env.GOOGLE_REDIRECT_URI || `http://localhost:${port}/api/auth/google/callback`,
   },
   outlook: {
     enabled: bool(process.env.OUTLOOK_ENABLED),
@@ -34,7 +39,7 @@ const config = {
     clientId: process.env.OUTLOOK_CLIENT_ID || '',
     clientSecret: process.env.OUTLOOK_CLIENT_SECRET || '',
     redirectUri:
-      process.env.OUTLOOK_REDIRECT_URI || `http://localhost:${process.env.PORT || 3000}/api/auth/outlook/callback`,
+      process.env.OUTLOOK_REDIRECT_URI || `http://localhost:${port}/api/auth/outlook/callback`,
   },
   caldav: {
     enabled: bool(process.env.CALDAV_ENABLED),
