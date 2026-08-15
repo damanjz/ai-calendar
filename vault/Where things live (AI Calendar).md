@@ -74,10 +74,10 @@ Every artifact and its exact path, so nothing is lost or deleted by accident. Sn
 
 ## Vault (notes)
 
-**Canonical: `vault\` in this repo** — [[AI Calendar]] (index) · [[Status]] · [[Decisions]] · [[Changelog]] · [[Architecture]] · this note. They travel with the code, so a clone carries its own context.
+`vault\` in this repo — [[AI Calendar]] (index) · [[Status]] · [[Decisions]] · [[Changelog]] · [[Architecture]] · this note. They travel with the code, so a clone carries its own context.
 
-> [!warning] Duplicate note set
-> A parallel copy exists at `C:\Users\daman\Documents\ObsidianVault\Projects\AI Calendar\` (created 2026-08-15 before the in-repo `vault/` was known). **The in-repo copy is canonical**; the ObsidianVault one should be reduced to a pointer, or the two will rot apart.
+> [!note] Two copies exist, deliberately
+> The working set lives in Daman's vault at `C:\Users\daman\Documents\ObsidianVault\Projects\AI Calendar\` (which also holds `Analysis`, `Assistant Guide` and `Task List` — vault-only notes that don't ship publicly). The `vault\` folder here is what ships with the repo. **Sync the two on any material change.**
 
 ## Notes
 
