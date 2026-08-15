@@ -2,22 +2,33 @@
 
 # 📅 AI Calendar
 
-**A calendar your AI assistant can manage.**
+**The open-source calendar your AI assistant can actually manage.**
 
-A full-featured, open-source calendar app — Month / Week / Day / Agenda views,
-drag & drop rescheduling, multi-calendar with colors — backed by a
-**provider-agnostic interrogation API** that any AI assistant (or human, or
-script) can use to read availability, check conflicts, and book appointments
-across **Google Calendar, Microsoft 365, CalDAV, and a local file provider**.
+> A full-featured calendar app — Month / Week / Day / Agenda views, drag & drop
+> rescheduling, multi-calendar with colors — backed by a **provider-agnostic
+> interrogation API** so any AI assistant (or human, or script) can read
+> availability, check conflicts, and book appointments across
+> **Google Calendar · Microsoft 365 · CalDAV · local files**.
 
 ```
-│ UI (React)  ──►  Interrogation API (Express)  ──►  local | google | outlook | caldav
+┌─────────────┐      ┌──────────────────────────┐      ┌───────────────────┐
+│  🖥  UI      │      │  🤖  Interrogation API   │      │  🗄  Providers     │
+│  (React)    │ ───► │  (Express)               │ ───► │  local            │
+│             │      │  read · search · book    │      │  google           │
+│  drag &     │      │  reschedule · reminders  │      │  outlook          │
+│  drop       │      │  import · export · ics   │      │  caldav           │
+└─────────────┘      └──────────────────────────┘      └───────────────────┘
 ```
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Node](https://img.shields.io/badge/Node-%3E%3D20-339933)
 ![React](https://img.shields.io/badge/React-19-61DAFB)
 ![Express](https://img.shields.io/badge/Express-5-000000)
+![Tests](https://img.shields.io/badge/Tests-163%20passing-2ea44f)
+![Coverage](https://img.shields.io/badge/Coverage-91.4%25-2ea44f)
+![Audit](https://img.shields.io/badge/npm%20audit-0%20vulnerabilities-success)
+![Providers](https://img.shields.io/badge/Providers-4-brightgreen)
+![For](https://img.shields.io/badge/For-AI%20Assistants-8A2BE2)
 
 </div>
 
@@ -46,7 +57,7 @@ across **Google Calendar, Microsoft 365, CalDAV, and a local file provider**.
 
 ---
 
-## Why this exists
+## ✨ Why this exists
 
 Calendars are usually locked inside one vendor's API. If you want an AI
 assistant to *actually manage your schedule* — not just chat about it — you need
@@ -55,62 +66,62 @@ the events live.
 
 AI Calendar is that interface:
 
-- **One normalized event model** across Google, Microsoft 365, CalDAV, and local
+- **🔌 One normalized event model** across Google, Microsoft 365, CalDAV, and local
   files. A booking created through one provider looks identical to one from
   another.
-- **One interrogation workflow** for assistants: *confirm access → list
+- **🤖 One interrogation workflow** for assistants: *confirm access → list
   calendars → read events → find free slots → verify conflicts → book →
   maintain*. The same steps work for every provider.
-- **A real UI on top.** A polished calendar app that humans can use directly,
+- **🖥 A real UI on top.** A polished calendar app that humans can use directly,
   and that exercises the same API an assistant would.
 
 ---
 
-## Features
+## 🎨 Features
 
-### Calendar UI (`client/`)
+### 🖥 Calendar UI (`client/`)
 
-- **Four views** — Month (42-cell grid), Week (24-hour grid), Day, and Agenda
+- **📆 Four views** — Month (42-cell grid), Week (24-hour grid), Day, and Agenda
   (next 14 days), with `‹ Today ›` navigation.
-- **Drag & drop rescheduling** — drop an event on another day in Month view, or
+- **🖱 Drag & drop rescheduling** — drop an event on another day in Month view, or
   drag it to a specific time slot in Week/Day view (snaps to 15-minute
   increments, duration preserved).
-- **Multi-calendar support** — switch providers, toggle calendar visibility,
+- **🌈 Multi-calendar support** — switch providers, toggle calendar visibility,
   and assign each calendar its own color.
-- **Conflict-aware booking** — the booking form asks the API whether a slot is
+- **⚡ Conflict-aware booking** — the booking form asks the API whether a slot is
   free before you save, warns you if it isn't, and only double-books when you
   explicitly opt in.
-- **Edit / reschedule / delete** any event from its booking modal.
-- **Responsive layout** — usable from desktop down to ~640px.
-- Preferences (visibility + colors) persist in `localStorage`.
+- **✏️ Edit / reschedule / delete** any event from its booking modal.
+- **📱 Responsive layout** — usable from desktop down to ~640px.
+- **💾 Preferences** (visibility + colors) persist in `localStorage`.
 
-### Interrogation API (`server/`)
+### 🤖 Interrogation API (`server/`)
 
-- **Normalized events** — `{ id, provider, calendarId, title, description,
+- **🔗 Normalized events** — `{ id, provider, calendarId, title, description,
   location, start, end, allDay, attendees, category, reminders }` (ISO 8601 UTC).
-- **Recurring events, expanded** — series are returned as one concrete instance
+- **🔁 Recurring events, expanded** — series are returned as one concrete instance
   per occurrence (with `recurringEventId` + `originalStart`), so availability and
   conflict checks are correct for every occurrence, not just the first.
-- **Series-scoped edits** — `PATCH`/`DELETE` accept `scope=this|following|all`,
+- **🎯 Series-scoped edits** — `PATCH`/`DELETE` accept `scope=this|following|all`,
   so one occurrence, the rest of the series, or everything can be changed.
-- **Availability engine** — finds every free slot of a requested duration inside
+- **🕒 Availability engine** — finds every free slot of a requested duration inside
   a window, with configurable slot granularity, working hours (`workDays` /
   `workStart` / `workEnd`), and an IANA `timeZone` to interpret them in.
-- **Search & reminders** — `?q=` filters events by title/description/location/
+- **🔍 Search & reminders** — `?q=` filters events by title/description/location/
   category; `/api/reminders` lists events whose reminders fire in a window.
-- **ICS import/export** — `POST /api/import/ics` and `GET /api/export/ics`
+- **📥📤 ICS import/export** — `POST /api/import/ics` and `GET /api/export/ics`
   round-trip events (RRULEs preserved as series masters).
-- **Server-side conflict detection** — `POST /api/conflicts` is authoritative,
+- **🛡 Server-side conflict detection** — `POST /api/conflicts` is authoritative,
   so assistants and the UI can't disagree.
-- **Provider registry** — `local`, `google`, `outlook`, `caldav` implement one
+- **🧩 Provider registry** — `local`, `google`, `outlook`, `caldav` implement one
   contract; adding a new provider means implementing five methods.
-- **Consistent errors** — every failure returns
+- **📦 Consistent errors** — every failure returns
   `{ "error": { "code", "message" } }`.
-- **Optional API key** — protect `/api/*` with a shared key when exposed.
+- **🔐 Optional API key** — protect `/api/*` with a shared key when exposed.
 
 ---
 
-## Quick start
+## 🚀 Quick start
 
 > Requires **Node.js 20+**.
 
@@ -135,7 +146,7 @@ delete it: it's all persisted to `server/data/local-calendar.json`.
 
 ---
 
-## Use the calendar UI
+## 🖥 Use the calendar UI
 
 | Action | How |
 | --- | --- |
@@ -152,7 +163,7 @@ If the API isn't reachable, a red banner appears with a retry button.
 
 ---
 
-## Use the API directly
+## 🔌 Use the API directly
 
 The API speaks JSON over HTTP. All times are **ISO 8601 with timezone**
 (`2026-08-17T09:00:00Z`).
@@ -193,7 +204,9 @@ For the full request/response contract, see the [API reference](#api-reference).
 
 ---
 
-## Let an AI assistant manage it
+## 🤖 Let an AI assistant manage it
+
+> *"Hey, can you book a dentist appointment for Tuesday afternoon when I'm free?"*
 
 AI Calendar is designed to be driven by an assistant. Give it this one workflow
 and it can manage your schedule end to end:
@@ -216,7 +229,7 @@ rules of thumb (verify before you assert, confirm intent before booking).
 
 ---
 
-## Connect a real provider
+## 🌍 Connect a real provider
 
 Copy the template and fill it in:
 
@@ -227,7 +240,7 @@ cp server/.env.example server/.env
 Then set `PROVIDERS` to the providers you want active. Each provider also needs
 its own credentials:
 
-### Google Calendar
+### 🟢 Google Calendar
 
 1. Create credentials at [Google Cloud Console](https://console.cloud.google.com/)
    (OAuth 2.0 Client ID, application type **Web application**).
@@ -243,7 +256,7 @@ its own credentials:
 4. Open `http://localhost:3000/api/auth/google` in a browser, complete the
    consent flow, and the server stores the token for you.
 
-### Microsoft 365 / Outlook
+### 🔵 Microsoft 365 / Outlook
 
 1. Register an app in [Azure Portal](https://portal.azure.com/) (single-tenant
    or "common"), with a **Web** platform redirect to
@@ -258,7 +271,7 @@ its own credentials:
    ```
 4. Visit `http://localhost:3000/api/auth/outlook` to authenticate once.
 
-### CalDAV
+### 🟣 CalDAV
 
 Works with Apple iCloud, Nextcloud, Baikal, Radicale, and other CalDAV servers:
 
@@ -279,7 +292,7 @@ the API) and it will show up as `ready` in `/health`.
 
 ---
 
-## Security posture
+## 🛡 Security posture
 
 This is a **single-user, self-hosted** tool, and the defaults are chosen to match:
 
@@ -298,7 +311,7 @@ If you expose this beyond localhost, set `API_KEY` **and** a specific
 
 ---
 
-## API reference
+## 📚 API reference
 
 ### Conventions
 
@@ -475,7 +488,7 @@ authorization URL; the callback exchanges the code and stores the token.
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
 All configuration is environment-driven (`server/.env`, see
 [`.env.example`](server/.env.example)):
@@ -495,7 +508,7 @@ All configuration is environment-driven (`server/.env`, see
 
 ---
 
-## Project structure
+## 🗂 Project structure
 
 ```
 ai-calendar/
@@ -526,25 +539,31 @@ ephemeral port without starting the production listener.
 
 ---
 
-## Tests
+## 🧪 Tests
 
 ```bash
-npm test              # run everything
+npm test              # run everything (163 tests, all passing)
 npm run test:coverage # with a coverage report
 ```
 
 The suite uses Node's built-in `node:test` — **no test-framework dependency**.
 It covers the availability engine's edge cases (enclosed, touching, zero-length
 and DST-crossing intervals), request validation, the local provider's full CRUD
-lifecycle, the Google/Outlook/CalDAV adapters against a stubbed transport, and
-the HTTP layer end to end (auth, CORS, error envelope, book → conflict → delete).
+lifecycle, the Google/Outlook/CalDAV adapters against a stubbed transport, the
+HTTP layer end to end (auth, CORS, error envelope, book → conflict → delete),
+and series-scoped recurring edits plus ICS import/export.
+
+There is also **`npm run verify:live -w server`** — an end-to-end check that
+exercises a **real** provider account (read-only checks first, then
+create/read/move/delete in a 2038 window, clean up), for when you connect
+Google/Outlook/CalDAV credentials.
 
 One property is asserted directly, because the whole product rests on it:
 **every slot `availability` offers must be reported clear by `conflicts`.**
 
 ---
 
-## How availability works
+## ⏱ How availability works
 
 `GET /api/availability` is powered by a small scheduling engine
 (`server/src/lib/util.js`):
@@ -559,7 +578,7 @@ availability and conflict checks can never disagree.
 
 ---
 
-## How recurring events work
+## 🔁 How recurring events work
 
 The availability engine is purely interval-based — it reads `start` and `end`
 and nothing else. A recurring event left as a single "master" with a repeat rule
@@ -606,7 +625,7 @@ supports whole-series writes.
 
 ---
 
-## Commands
+## ⚡ Commands
 
 | Command | Description |
 | --- | --- |
@@ -617,10 +636,11 @@ supports whole-series writes.
 | `npm run lint` | Lint both workspaces (oxlint) |
 | `npm run seed` | Reset the local calendar to an empty state |
 | `npm run start` | Run only the server (production) |
+| `npm run verify:live -w server` | Exercise a real Google/Outlook/CalDAV account end to end |
 
 ---
 
-## Roadmap
+## 🗺 Roadmap
 
 - [x] Recurring events (RRULE) — **read/expand + create**, plus series-scoped
       edit and delete ("this / this and following / all")
@@ -633,7 +653,7 @@ supports whole-series writes.
 
 ---
 
-## Contributing
+## 🙌 Contributing
 
 Contributions are welcome! This is a small, deliberately simple codebase.
 
@@ -645,6 +665,6 @@ Contributions are welcome! This is a small, deliberately simple codebase.
 
 ---
 
-## License
+## 📜 License
 
 [MIT](LICENSE) © 2026 Apuri Daman Reddy

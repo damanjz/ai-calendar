@@ -12,6 +12,22 @@ updated: 2026-08-16
 
 > Dated change history for the project. Newest entries at the bottom (append-only). Every project-touching session adds an entry here (Home rule 4). Absolute dates only.
 
+## 2026-08-16 — Feature round + review fixes
+- **Ask:** *"we should get it checked"* / critique will land in the repo → features first, then the review.
+- **Series-scoped edit/delete** — `PATCH`/`DELETE /api/events/:id?scope=this|following|all`. `local` stores `this` as per-occurrence exceptions, splits the series for `following` (truncates the old via `UNTIL`, creates a new master derived from the new start), rewrites the master for `all`. Google/Outlook support `this`/`all` natively; CalDAV is `all`-only; unsupported scopes → `400`.
+- **Timezones & working hours** — `/api/availability` accepts `timeZone` (IANA, DST-safe) + `workDays`/`workStart`/`workEnd`; slots must fit entirely inside the working window.
+- **Reminders, categories & search** — `reminders` (minutes-before offsets, validated, sorted, ≤ 10, ≤ 28 days), `category` (≤ 50 chars), `?q=` search over title/description/location/category, `GET /api/reminders` (defaults next 24 h; per-occurrence triggers for recurring series).
+- **ICS import/export** — `POST /api/import/ics` (validates each VEVENT, RRULE → series master, reports per-event `errors`) and `GET /api/export/ics` (`text/calendar`; uses a provider's raw unexpanded masters when available).
+- **Deps** — `googleapis ^173.0.0`, `node-ical ^0.22.0` → **npm audit: 0 vulnerabilities** (pre-existing moderate findings gone; no overrides needed).
+- **Docs** — root + `server/` READMEs and `server/docs/assistant-guide.md` updated (scope, availability params, reminders/search/import-export, model fields).
+- Verified: **154 tests** pass, lint clean, build passes. Committed as `2351cc5` and pushed; rebased over the vault-note commits pushed from the main PC.
+- **Review round (main PC)** — three defects found reviewing `2351cc5`, shipped as failing tests (`0fd0863`) then fixes (`583af5a`), plus `c70a870`:
+  1. **HIGH** `/api/reminders` fetched events over the *same* window as the trigger times, so a reminder due 09:00 for a 10:00 event was invisible to "next 30 minutes". Now widens the event fetch by the largest permitted offset; offsets capped at 28 days via one exported `MAX_REMINDER_LEAD_MINUTES`.
+  2. **MEDIUM** an oversized ICS returned 500. JSON limit now derived from `MAX_ICS_BYTES` so the route's own 5 MB check fires with a message naming the ICS document; anything past the parser ceiling returns a clean `413 payload_too_large`; bytes counted, not JS string length.
+  3. **MEDIUM** export requested an ~8000-year window. `getRawEvents` moved onto the base provider contract with a bounded default; the route accepts `from`/`to` (±1 year default). `local` still exports its whole store.
+  4. **OAuth** redirect URIs were built from `PORT` while the server bound `API_PORT` — Google/Microsoft were told to call back on a dead port. Resolved once, derived from the real bind port; explicit `*_REDIRECT_URI` env still wins. `config.test.js` + `scripts/verify-live-provider.mjs` (`npm run verify:live -w server`) added.
+- Verified: **163 tests** pass, lint clean.
+
 ## 2026-08-15 — Clean slate + usage docs
 - **Ask:** *"alright remove all example data and gimme and how to use this as well"*
 - Removed all seeded events from `server/data/local-calendar.json` (0 events; `work`/`personal` calendars kept). `src/seed.js` rewritten to reset to an empty state instead of seeding samples.
