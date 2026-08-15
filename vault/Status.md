@@ -28,7 +28,11 @@ updated: 2026-08-15
 - **Series-scoped edit/delete** — "this occurrence / this and following / all events".
 - **Recurrence UI** — a rule can only be set via the API today; no control in the booking modal.
 - Persist `recurrence` on write for remote providers (`toGoogleEvent`/`toGraphEvent`/`toIcs` emit no rule, so *creating* a recurring event only works on `local`).
-- Still deferred from the original scoping pick: reminders/categories/search · ICS import/export.
+- `distinct=true` option on availability so slots don't overlap each other (08:00, 08:15, 08:30 for 30-min slots) — today "give me the first 3 slots" returns three near-identical times.
+- Client-side series handling: drag-and-drop resolves by `id`, which is now an *instance* id. Dragging an occurrence PATCHes that instance — correct-ish, but untested and unexplained in the UI.
+- Split `client/src/App.jsx` (322 lines: providers + views + drag/drop + modal orchestration) if it grows further. Under the 800-line ceiling, not urgent.
+- Add a repo `CHANGELOG.md` mirroring `vault/Changelog.md`.
+- Still deferred from the original scoping pick: reminders/categories/search · ICS import/export · Docker image · refresh-token rotation for long-running assistants.
 
 ## Known issues / risks
 - ⚠ **No remote provider has ever run against a real account.** Google/Outlook/CalDAV pass against *stubbed transports*, which verifies our logic and request shapes — not the live APIs. Highest-risk single change: the Outlook switch from `/me/events` to `/me/calendarView`, reasoned from Graph's documented behaviour and never executed.
