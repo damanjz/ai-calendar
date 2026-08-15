@@ -90,7 +90,7 @@ export default class GoogleProvider extends CalendarProvider {
   normalize(item, calendarId) {
     const start = item.start?.dateTime || item.start?.date
     const end = item.end?.dateTime || item.end?.date
-    return {
+    const event = {
       id: item.id,
       provider: this.id,
       calendarId: item.calendarId || calendarId || null,
@@ -102,6 +102,13 @@ export default class GoogleProvider extends CalendarProvider {
       allDay: Boolean(item.start?.date && !item.start?.dateTime),
       attendees: (item.attendees || []).map((a) => a.email),
     }
+    // singleEvents:true means Google expands series for us; each instance
+    // carries the id of the master it came from.
+    if (item.recurringEventId) {
+      event.recurringEventId = item.recurringEventId
+      event.originalStart = item.originalStartTime?.dateTime || item.originalStartTime?.date || start
+    }
+    return event
   }
 
   toGoogleEvent(event) {

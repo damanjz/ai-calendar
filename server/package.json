@@ -17,7 +17,8 @@
   "dependencies": {
     "express": "^5.1.0",
     "googleapis": "^144.0.0",
-    "node-ical": "^0.20.1"
+    "node-ical": "^0.20.1",
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
     "oxlint": "^1.75.0"

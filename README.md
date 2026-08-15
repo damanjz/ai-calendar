@@ -88,6 +88,9 @@ AI Calendar is that interface:
 
 - **Normalized events** — `{ id, provider, calendarId, title, description,
   location, start, end, allDay, attendees }` (ISO 8601 UTC).
+- **Recurring events, expanded** — series are returned as one concrete instance
+  per occurrence (with `recurringEventId` + `originalStart`), so availability and
+  conflict checks are correct for every occurrence, not just the first.
 - **Availability engine** — finds every free slot of a requested duration inside
   a window, with configurable slot granularity.
 - **Server-side conflict detection** — `POST /api/conflicts` is authoritative,
@@ -501,6 +504,50 @@ availability and conflict checks can never disagree.
 
 ---
 
+## How recurring events work
+
+The availability engine is purely interval-based — it reads `start` and `end`
+and nothing else. A recurring event left as a single "master" with a repeat rule
+would therefore block only its **first** occurrence and leave every later one
+bookable. Worse, a series that began before the requested window is removed by
+the window filter entirely, so *all* of its occurrences read as free.
+
+Every provider therefore returns recurring events **already expanded**, one
+instance per occurrence in `[from, to)`:
+
+| Provider | How |
+| --- | --- |
+| `google` | `singleEvents: true` — Google expands server-side |
+| `outlook` | `/me/calendarView` — Graph expands server-side (the plain `/events` collection ignores the date range and returns series masters) |
+| `caldav` | `node-ical` parses the `RRULE` but never expands it, so occurrences are generated locally with `rrule`, honouring `EXDATE` and `RECURRENCE-ID` overrides |
+| `local` | expanded in-process from the stored rule, **before** the window filter |
+
+Each instance carries `recurringEventId` (the series) and `originalStart` (its
+own start), and gets a unique `id` of the form `<seriesId>_<timestamp>` — the UI
+keys render lists on `id`, so instances must not collide.
+
+Expansion is capped at 1000 instances per series, and the iterator stops at the
+cap rather than materialising every occurrence first, so a pathological rule
+(`FREQ=MINUTELY` with no end) cannot exhaust memory.
+
+To **create** a recurring event, pass a `recurrence` rule to `POST /api/book`
+(`local` provider only for now):
+
+```json
+{ "provider": "local", "calendarId": "work", "title": "Weekly standup",
+  "start": "2031-09-01T09:00:00Z", "end": "2031-09-01T09:30:00Z",
+  "recurrence": "RRULE:FREQ=WEEKLY;COUNT=10" }
+```
+
+An invalid rule is rejected with `bad_request` at write time.
+
+> **Not yet supported:** editing or deleting a *series*. `PATCH`/`DELETE` act on
+> a single id, and the blast radius differs by provider (Google affects one
+> occurrence; CalDAV removes the whole `.ics` resource). Series-scoped edits
+> ("this / this and following / all") are still on the roadmap.
+
+---
+
 ## Commands
 
 | Command | Description |
@@ -517,7 +564,8 @@ availability and conflict checks can never disagree.
 
 ## Roadmap
 
-- [ ] Recurring events (RRULE)
+- [x] Recurring events (RRULE) — **read/expand + create**; series-scoped edit
+      and delete ("this / this and following / all") still to do
 - [ ] Timezones & working hours
 - [ ] Reminders, categories, and search
 - [ ] ICS import/export

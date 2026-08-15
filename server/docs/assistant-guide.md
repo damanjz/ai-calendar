@@ -121,6 +121,42 @@ slot. Never say "booked" unless the API returned `"booked": true`.
 - **Cancel:** `DELETE /api/events/:eventId?provider=google`. Confirm with the user
   before deleting; report the result.
 
+## Recurring events
+
+Recurring events are returned **already expanded**: one entry per occurrence in
+the window you asked for, never a single "master" carrying a repeat rule. So you
+can treat every event you read as a concrete block of time and do no recurrence
+maths yourself.
+
+An occurrence carries two extra fields:
+
+- `recurringEventId` — the id of the series it belongs to
+- `originalStart` — that occurrence's own start time
+
+Its `id` is unique per occurrence (`<seriesId>_<timestamp>`), so occurrences can
+be told apart.
+
+**When booking**, you may pass a `recurrence` rule to create a repeating event:
+
+```json
+{
+  "provider": "local",
+  "title": "Weekly standup",
+  "start": "2031-09-01T09:00:00Z",
+  "end": "2031-09-01T09:30:00Z",
+  "recurrence": "RRULE:FREQ=WEEKLY;COUNT=10"
+}
+```
+
+An invalid rule is rejected with `bad_request`, so a malformed rule never
+silently produces a one-off event.
+
+⚠ **Editing and deleting a series is not yet supported.** `PATCH` and `DELETE`
+act on a single id, and what that means differs by provider — for Google it
+affects one occurrence, for CalDAV it removes the whole series. **Before
+changing or cancelling anything with a `recurringEventId`, tell the user it is
+part of a repeating series and ask what they want**, rather than guessing.
+
 ## Error handling
 
 Errors come back as `{ "error": { "code", "message" } }`. Translate these for

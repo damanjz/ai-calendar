@@ -228,3 +228,69 @@ test('events endpoint rejects invalid dates', async () => {
   assert.equal(status, 400)
   assert.equal(body.error.code, 'bad_request')
 })
+
+// ---------------------------------------------------------------------------
+// Recurring events over HTTP
+// ---------------------------------------------------------------------------
+
+test('a recurring booking is expanded on read and blocks every occurrence', async () => {
+  const created = await book({
+    title: 'Weekly standup',
+    start: '2031-09-01T09:00:00Z', // a Monday
+    end: '2031-09-01T09:30:00Z',
+    recurrence: 'RRULE:FREQ=WEEKLY;COUNT=4',
+  })
+  assert.equal(created.status, 201)
+  const seriesId = created.body.event.id
+
+  const window = 'from=2031-09-01T00:00:00Z&to=2031-09-30T00:00:00Z'
+  const listed = await call(`/api/events?provider=local&calendarId=work&${window}`, { headers: KEY })
+  assert.equal(listed.body.count, 4, 'four occurrences should be returned, not one master')
+  assert.equal(listed.body.events.every((e) => e.recurringEventId === seriesId), true)
+  assert.equal(new Set(listed.body.events.map((e) => e.id)).size, 4, 'instance ids must be unique')
+
+  // The THIRD occurrence must be busy — the case the old code got wrong.
+  const conflict = await call('/api/conflicts', {
+    method: 'POST', headers: KEY,
+    body: JSON.stringify({ provider: 'local', calendarId: 'work', start: '2031-09-15T09:00:00Z', end: '2031-09-15T09:30:00Z' }),
+  })
+  assert.equal(conflict.body.clear, false, 'a later occurrence must be reported busy')
+
+  // ... and availability must not offer it.
+  const avail = await call(
+    `/api/availability?provider=local&calendarId=work&from=2031-09-15T09:00:00Z&to=2031-09-15T10:00:00Z&duration=30&granularity=30`,
+    { headers: KEY },
+  )
+  assert.equal(
+    avail.body.slots.some((s) => s.start === '2031-09-15T09:00:00.000Z'),
+    false,
+    'availability must not offer a slot held by a recurring occurrence',
+  )
+
+  await call(`/api/events/${seriesId}?provider=local&calendarId=work`, { method: 'DELETE', headers: KEY })
+})
+
+test('an invalid recurrence rule is rejected at write time', async () => {
+  const { status, body } = await book({
+    title: 'Broken', start: '2031-10-01T09:00:00Z', end: '2031-10-01T09:30:00Z',
+    recurrence: 'RRULE:FREQ=NONSENSE',
+  })
+  assert.equal(status, 400)
+  assert.equal(body.error.code, 'bad_request')
+  assert.match(body.error.message, /recurrence/i)
+})
+
+test('a non-recurring booking is unchanged by the recurrence feature', async () => {
+  const created = await book({ title: 'One-off', start: '2031-11-03T09:00:00Z', end: '2031-11-03T09:30:00Z' })
+  assert.equal(created.status, 201)
+  assert.equal(created.body.event.recurrence, undefined)
+
+  const listed = await call(
+    '/api/events?provider=local&calendarId=work&from=2031-11-01T00:00:00Z&to=2031-11-30T00:00:00Z',
+    { headers: KEY },
+  )
+  assert.equal(listed.body.count, 1)
+  assert.equal(listed.body.events[0].recurringEventId, undefined)
+
+  await call(`/api/events/${created.body.event.id}?provider=local&calendarId=work`, { method: 'DELETE', headers: KEY })
+})

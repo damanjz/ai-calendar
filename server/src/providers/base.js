@@ -12,6 +12,20 @@ import { findFreeSlots } from '../lib/util.js'
  *   allDay,  // bool
  *   attendees // [email, ...]
  * }
+ *
+ * Recurring events are always returned EXPANDED: getEvents yields one concrete
+ * instance per occurrence in [from, to), never a master carrying a rule. The
+ * availability engine is purely interval-based, so an unexpanded master would
+ * block only its first occurrence and leave the rest bookable.
+ *
+ * Instances additionally carry:
+ * {
+ *   recurringEventId, // id of the series this came from
+ *   originalStart     // this occurrence's own start (ISO 8601)
+ * }
+ *
+ * On write, an event may carry `recurrence` — an RRULE string or an array of
+ * iCalendar lines. Only the `local` provider persists it today.
  */
 export default class CalendarProvider {
   constructor(id, name) {

@@ -114,7 +114,7 @@ export default class OutlookProvider extends CalendarProvider {
 
   normalize(item, calendarId) {
     const allDay = item.allDay !== false && item.start?.date && !item.start?.dateTime
-    return {
+    const event = {
       id: item.id,
       provider: this.id,
       calendarId: item.calendarId || calendarId || null,
@@ -126,6 +126,12 @@ export default class OutlookProvider extends CalendarProvider {
       allDay,
       attendees: (item.attendees || []).map((a) => a.emailAddress?.address),
     }
+    // calendarView returns type "occurrence"/"exception" for expanded series.
+    if (item.seriesMasterId) {
+      event.recurringEventId = item.seriesMasterId
+      event.originalStart = event.start
+    }
+    return event
   }
 
   toGraphEvent(event) {
@@ -151,17 +157,23 @@ export default class OutlookProvider extends CalendarProvider {
   }
 
   async getEvents({ calendarId, from, to }) {
+    // /calendarView, NOT /events. startDateTime and endDateTime are only
+    // honoured by calendarView, which is also what expands recurring series
+    // into individual occurrences. Against /events those params are ignored
+    // and Graph returns series MASTERS, so a weekly meeting would appear once
+    // at its series start and block no other slot.
     const path = calendarId
-      ? `/me/calendars/${encodeURIComponent(calendarId)}/events`
-      : '/me/events'
+      ? `/me/calendars/${encodeURIComponent(calendarId)}/calendarView`
+      : '/me/calendarView'
     const params = new URLSearchParams({
       startDateTime: new Date(from).toISOString(),
       endDateTime: new Date(to).toISOString(),
-      '$select': 'id,subject,bodyPreview,location,start,end,attendees,allDay',
+      '$select': 'id,subject,bodyPreview,location,start,end,attendees,allDay,type,seriesMasterId',
       '$orderby': 'start/dateTime',
+      '$top': '250',
     })
     const data = await this.graph(`${path}?${params.toString()}`)
-    return data.value.map((item) => this.normalize(item, calendarId))
+    return (data.value || []).map((item) => this.normalize(item, calendarId))
   }
 
   async createEvent({ calendarId, event }) {
