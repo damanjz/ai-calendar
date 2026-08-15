@@ -42,14 +42,16 @@ export function parseEventBody(body) {
 export function parseConflictBody(body) {
   const startRaw = body.start
   const endRaw = body.end
-  const duration = Number(body.duration)
-  if (!startRaw && !(Number.isInteger(duration) && duration > 0)) {
+
+  // "start" is required in both accepted forms: start+end, or start+duration.
+  if (!startRaw) {
     throw badRequest('Provide either "start"+"end" or "start"+"duration".')
   }
   const start = new Date(startRaw)
   if (Number.isNaN(start.getTime())) {
     throw badRequest('"start" must be a valid ISO 8601 date-time.')
   }
+
   let end
   if (endRaw) {
     end = new Date(endRaw)
@@ -57,6 +59,10 @@ export function parseConflictBody(body) {
       throw badRequest('"end" must be a valid ISO 8601 date-time.')
     }
   } else {
+    const duration = Number(body.duration)
+    if (!Number.isInteger(duration) || duration <= 0) {
+      throw badRequest('"duration" must be a positive integer number of minutes when "end" is omitted.')
+    }
     end = new Date(start.getTime() + duration * 60000)
   }
   if (!(start < end)) {
