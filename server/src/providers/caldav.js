@@ -32,6 +32,24 @@ export default class CalDavProvider extends CalendarProvider {
       .filter(Boolean)
   }
 
+  /**
+   * Resolves a caller-supplied calendarId to a configured collection URL.
+   *
+   * SECURITY: calendarId is otherwise fetched directly with the account's
+   * Basic-auth header attached — an SSRF that leaks the CalDAV credentials to
+   * any host the caller names (cloud metadata endpoints, internal services,
+   * an attacker's server). It MUST be an exact match for one of the configured
+   * collection URLs; anything else is refused before any request is made.
+   */
+  resolveTargets(calendarId) {
+    const configured = this.urls()
+    if (!calendarId) return configured
+    if (configured.includes(calendarId)) return [calendarId]
+    throw badRequest(
+      `Unknown CalDAV calendar. Use one of the ids from GET /api/calendars?provider=caldav.`,
+    )
+  }
+
   basicAuth() {
     return 'Basic ' + Buffer.from(`${this.cfg.username}:${this.cfg.password}`).toString('base64')
   }
@@ -66,7 +84,7 @@ export default class CalDavProvider extends CalendarProvider {
   }
 
   async getEvents({ calendarId, from, to }) {
-    const targets = calendarId ? [calendarId] : this.urls()
+    const targets = this.resolveTargets(calendarId)
     const events = []
     for (const url of targets) {
       let data
@@ -205,19 +223,41 @@ export default class CalDavProvider extends CalendarProvider {
     if (event.description) lines.push(`DESCRIPTION:${this.escapeText(event.description)}`)
     if (event.location) lines.push(`LOCATION:${this.escapeText(event.location)}`)
     for (const email of event.attendees || []) {
-      lines.push(`ATTENDEE;CN=${this.escapeText(email)};ROLE=REQ-PARTICIPANT:mailto:${email}`)
+      // mailto: value must be escaped too — a raw CR/LF here would inject a new
+      // iCalendar line/component (e.g. a smuggled BEGIN:VALARM).
+      const safe = this.escapeText(email)
+      lines.push(`ATTENDEE;CN=${safe};ROLE=REQ-PARTICIPANT:mailto:${safe}`)
     }
     lines.push('END:VEVENT', 'END:VCALENDAR')
     return lines.join('\r\n') + '\r\n'
   }
 
   escapeText(value) {
-    return String(value).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
+    // Order matters: escape backslash first. CR and LF are both neutralised —
+    // a lone \r would otherwise break a property line and allow structure
+    // injection into the emitted calendar.
+    return String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/;/g, '\\;')
+      .replace(/,/g, '\\,')
+      .replace(/\r\n|\r|\n/g, '\\n')
+  }
+
+  /** Resolves a single collection URL for a write, refusing an unconfigured one. */
+  resolveTarget(calendarId) {
+    if (!calendarId) return this.urls()[0]
+    return this.resolveTargets(calendarId)[0]
+  }
+
+  /** The resource path for an event, with the id encoded so it can't traverse or absolutise. */
+  resourceUrl(target, eventId) {
+    const slug = encodeURIComponent(String(eventId)) + '.ics'
+    return target.endsWith('/') ? `${target}${slug}` : `${target}/${slug}`
   }
 
   async putEvent(calendarId, uid, event) {
-    const target = calendarId || this.urls()[0]
-    const url = target.endsWith('/') ? `${target}${uid}.ics` : `${target}/${uid}.ics`
+    const target = this.resolveTarget(calendarId)
+    const url = this.resourceUrl(target, uid)
     const res = await fetch(url, {
       method: 'PUT',
       headers: {
@@ -256,8 +296,8 @@ export default class CalDavProvider extends CalendarProvider {
 
   async deleteEvent({ calendarId, eventId, scope = 'all' }) {
     this.assertScope(scope)
-    const target = calendarId || this.urls()[0]
-    const url = target.endsWith('/') ? `${target}${eventId}.ics` : `${target}/${eventId}.ics`
+    const target = this.resolveTarget(calendarId)
+    const url = this.resourceUrl(target, eventId)
     const res = await fetch(url, {
       method: 'DELETE',
       headers: { Authorization: this.basicAuth() },

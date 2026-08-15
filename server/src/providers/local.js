@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import pkg from 'rrule'
 import CalendarProvider from './base.js'
 import { dataPath, readJson, writeJson } from '../lib/fs-store.js'
-import { basicIso, expandRecurring, parseRecurrence } from '../lib/recurrence.js'
+import { basicIso, expandRecurring, parseRecurrence, MAX_INSTANCES_PER_SERIES } from '../lib/recurrence.js'
 import { badRequest, notFound } from '../lib/errors.js'
 
 const { RRule } = pkg
@@ -194,7 +194,11 @@ export default class LocalProvider extends CalendarProvider {
     const rr = rule.rrules()[0]
     if (!rr) throw badRequest('Cannot operate on this series.')
     const horizon = new Date(dtstart.getTime() + 100 * 365 * 24 * 3600 * 1000)
-    const occurrences = rule.between(dtstart, horizon, true, () => true)
+    // Cap enumeration: a high-frequency rule (FREQ=MINUTELY) over a 100-year
+    // horizon is tens of millions of dates and would hang the request. Stop at
+    // the same ceiling expansion uses.
+    let taken = 0
+    const occurrences = rule.between(dtstart, horizon, true, () => ++taken <= MAX_INSTANCES_PER_SERIES)
     return { rr, occurrences }
   }
 

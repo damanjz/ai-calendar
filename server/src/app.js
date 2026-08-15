@@ -24,6 +24,13 @@ export function createApp() {
   app.use(express.json({ limit: MAX_JSON_BODY }))
 
   app.use((req, res, next) => {
+    // Baseline security headers. The API serves JSON and downloads (ICS), never
+    // HTML that should be framed or sniffed.
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Referrer-Policy', 'no-referrer')
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+
     res.setHeader('Access-Control-Allow-Origin', config.corsOrigin)
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,x-api-key')

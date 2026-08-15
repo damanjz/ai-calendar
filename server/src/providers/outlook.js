@@ -105,8 +105,11 @@ export default class OutlookProvider extends CalendarProvider {
       },
     })
     if (!res.ok) {
-      const body = await res.text()
-      throw providerError(`Microsoft Graph request failed (${res.status}): ${body.slice(0, 300)}`)
+      // Log the upstream body server-side, but don't echo it to the client —
+      // it can carry internal identifiers / tenant detail.
+      const body = await res.text().catch(() => '')
+      console.error(`Microsoft Graph request failed (${res.status}): ${body.slice(0, 500)}`)
+      throw providerError(`Microsoft Graph request failed (${res.status}).`)
     }
     if (res.status === 204) return null
     return res.json()
@@ -190,8 +193,8 @@ export default class OutlookProvider extends CalendarProvider {
   async updateEvent({ calendarId, eventId, event, scope = 'this' }) {
     this.assertScope(scope)
     const path = calendarId
-      ? `/me/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`
-      : `/me/events/${eventId}`
+      ? `/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
+      : `/me/events/${encodeURIComponent(eventId)}`
     const data = await this.graph(path, {
       method: 'PATCH',
       body: JSON.stringify(this.toGraphEvent(event)),
@@ -202,8 +205,8 @@ export default class OutlookProvider extends CalendarProvider {
   async deleteEvent({ calendarId, eventId, scope = 'this' }) {
     this.assertScope(scope)
     const path = calendarId
-      ? `/me/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`
-      : `/me/events/${eventId}`
+      ? `/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
+      : `/me/events/${encodeURIComponent(eventId)}`
     await this.graph(path, { method: 'DELETE' })
     return { deleted: true }
   }

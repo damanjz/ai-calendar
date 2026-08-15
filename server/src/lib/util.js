@@ -56,11 +56,28 @@ export function intervalsOverlap(aStart, aEnd, bStart, bEnd) {
  * name) is provided the local day/time is interpreted there; otherwise the
  * slot's UTC day/time is used.
  */
+/**
+ * Hard ceiling on slot-scan iterations. A 100-year window at 1-minute
+ * granularity is ~52M steps; without a bound one request pins a CPU core and
+ * blocks the single-threaded server. 200k covers any sane query (e.g. a full
+ * year at 5-minute granularity ≈ 105k).
+ */
+export const MAX_SLOT_ITERATIONS = 200_000
+
 export function findFreeSlots(events, { from, to, duration, granularity = 15, timeZone, workingHours }) {
   const windowStart = new Date(from).getTime()
   const windowEnd = new Date(to).getTime()
   const slotMs = minutesToMs(duration)
   const step = minutesToMs(granularity)
+
+  // Refuse an abusive scan up front rather than looping into a hang.
+  const iterations = Math.ceil((windowEnd - windowStart) / step)
+  if (iterations > MAX_SLOT_ITERATIONS) {
+    throw badRequest(
+      `Requested availability range is too large. Narrow the window or increase "granularity" ` +
+        `(at most ${MAX_SLOT_ITERATIONS} slots per request).`,
+    )
+  }
 
   const busy = events
     .map((e) => {

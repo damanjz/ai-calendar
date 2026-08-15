@@ -35,7 +35,9 @@ export function createRouter() {
     if (!provider.authUrl) {
       throw badRequest(`Provider "${req.params.provider}" does not use OAuth. It is configured via environment variables.`)
     }
-    const state = req.query.state || cryptoRandom()
+    // Issue and remember a CSRF state token; the callback must echo it back.
+    const state = cryptoRandom()
+    rememberState(state)
     res.json({ url: provider.authUrl(state), state })
   })
 
@@ -44,9 +46,15 @@ export function createRouter() {
     if (!provider.handleCallback) {
       throw notFound(`Provider "${req.params.provider}" has no OAuth callback.`)
     }
+    // Verify the CSRF state BEFORE doing anything with the code. Without this an
+    // attacker can trick the user's browser into completing an OAuth flow the
+    // attacker started, binding the user's session to the attacker's account.
+    if (!consumeState(req.query.state)) {
+      throw badRequest('Invalid or missing OAuth "state". Start the flow again at /api/auth/' + req.params.provider + '.')
+    }
     const code = req.query.code
     if (!code) {
-      throw badRequest(`OAuth error: ${req.query.error || 'missing code'}`)
+      throw badRequest(`OAuth error: ${req.query.error ? 'provider returned an error' : 'missing code'}`)
     }
     await provider.handleCallback(code)
     res.type('text/plain').send('Authentication successful. You can close this tab and return to your assistant.')
@@ -292,4 +300,26 @@ function addDays(iso, days) {
 /** OAuth `state` is a CSRF defence — it must always be cryptographically random. */
 function cryptoRandom() {
   return crypto.randomUUID()
+}
+
+/**
+ * In-memory store of issued, unconsumed OAuth state tokens with a short TTL.
+ * Single-user self-hosted tool, so a process-local set is sufficient; a token
+ * is one-time-use and expires after 10 minutes.
+ */
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+const pendingStates = new Map()
+
+function rememberState(state) {
+  const now = Date.now()
+  for (const [s, exp] of pendingStates) if (exp < now) pendingStates.delete(s)
+  pendingStates.set(state, now + OAUTH_STATE_TTL_MS)
+}
+
+function consumeState(state) {
+  if (typeof state !== 'string' || !state) return false
+  const exp = pendingStates.get(state)
+  if (exp === undefined) return false
+  pendingStates.delete(state)
+  return exp >= Date.now()
 }

@@ -11,8 +11,29 @@ import { parseRecurrence } from './recurrence.js'
  */
 export const MAX_REMINDER_LEAD_MINUTES = 28 * 24 * 60
 
+/** Largest attendee list accepted on write. */
+export const MAX_ATTENDEES = 100
+
+/**
+ * Trims a string field and strips C0 control characters (except tab/LF/CR),
+ * which have no place in a title/description and can corrupt downstream
+ * consumers (logs, ICS export, other calendar clients) if stored raw.
+ * Built by codepoint so no literal control byte lives in this source file.
+ */
+function cleanText(value) {
+  if (typeof value !== 'string') return ''
+  let out = ''
+  for (const ch of value) {
+    const c = ch.codePointAt(0)
+    const control = c < 0x20 || c === 0x7f
+    const keep = c === 0x09 || c === 0x0a || c === 0x0d
+    if (!control || keep) out += ch
+  }
+  return out.trim()
+}
+
 export function parseEventBody(body) {
-  const title = typeof body.title === 'string' ? body.title.trim() : ''
+  const title = cleanText(body.title)
   if (!title) throw badRequest('"title" is required.')
   if (title.length > 200) throw badRequest('"title" must be 200 characters or fewer.')
 
@@ -30,8 +51,11 @@ export function parseEventBody(body) {
     throw badRequest('"end" must be after "start".')
   }
 
-  const description = typeof body.description === 'string' ? body.description.trim() : ''
-  const location = typeof body.location === 'string' ? body.location.trim() : ''
+  const description = cleanText(body.description)
+  const location = cleanText(body.location)
+  if (Array.isArray(body.attendees) && body.attendees.length > MAX_ATTENDEES) {
+    throw badRequest(`"attendees" may have at most ${MAX_ATTENDEES} entries.`)
+  }
   const attendees = Array.isArray(body.attendees)
     ? body.attendees
         .map((a) => (typeof a === 'string' ? a.trim() : ''))
