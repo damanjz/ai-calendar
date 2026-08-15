@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
+    "test": "npm run test -w server",
+    "test:coverage": "npm run test:coverage -w server",
     "lint": "npm run lint -w server && npm run lint -w client",
     "seed": "npm run seed -w server",
     "start": "npm run start -w server"
