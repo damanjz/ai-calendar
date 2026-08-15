@@ -1,4 +1,5 @@
 import { badRequest } from './errors.js'
+import { parseRecurrence } from './recurrence.js'
 
 export function parseEventBody(body) {
   const title = typeof body.title === 'string' ? body.title.trim() : ''
@@ -28,7 +29,7 @@ export function parseEventBody(body) {
     : []
   const allDay = Boolean(body.allDay)
 
-  return {
+  const event = {
     title,
     description,
     location,
@@ -37,19 +38,36 @@ export function parseEventBody(body) {
     start: start.toISOString(),
     end: end.toISOString(),
   }
+
+  // Recurrence is optional. Validate it here rather than at expansion time so a
+  // malformed rule is a 400 at write time, not a silently non-recurring event.
+  if (body.recurrence !== undefined && body.recurrence !== null && body.recurrence !== '') {
+    const recurrence = body.recurrence
+    if (typeof recurrence !== 'string' && !Array.isArray(recurrence)) {
+      throw badRequest('"recurrence" must be an RRULE string or an array of iCalendar lines.')
+    }
+    if (!parseRecurrence(recurrence, start)) {
+      throw badRequest('"recurrence" is not a valid RRULE (e.g. "RRULE:FREQ=WEEKLY;COUNT=10").')
+    }
+    event.recurrence = recurrence
+  }
+
+  return event
 }
 
 export function parseConflictBody(body) {
   const startRaw = body.start
   const endRaw = body.end
-  const duration = Number(body.duration)
-  if (!startRaw && !(Number.isInteger(duration) && duration > 0)) {
+
+  // "start" is required in both accepted forms: start+end, or start+duration.
+  if (!startRaw) {
     throw badRequest('Provide either "start"+"end" or "start"+"duration".')
   }
   const start = new Date(startRaw)
   if (Number.isNaN(start.getTime())) {
     throw badRequest('"start" must be a valid ISO 8601 date-time.')
   }
+
   let end
   if (endRaw) {
     end = new Date(endRaw)
@@ -57,6 +75,10 @@ export function parseConflictBody(body) {
       throw badRequest('"end" must be a valid ISO 8601 date-time.')
     }
   } else {
+    const duration = Number(body.duration)
+    if (!Number.isInteger(duration) || duration <= 0) {
+      throw badRequest('"duration" must be a positive integer number of minutes when "end" is omitted.')
+    }
     end = new Date(start.getTime() + duration * 60000)
   }
   if (!(start < end)) {

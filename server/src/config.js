@@ -3,9 +3,20 @@ function bool(value, fallback = false) {
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase())
 }
 
+const host = process.env.HOST || '127.0.0.1'
+
 const config = {
-  port: Number(process.env.PORT || 3000),
+  // API_PORT wins over PORT: some hosts inject PORT to mean "the port for the
+  // app being launched", which would otherwise make the API steal the UI's port.
+  port: Number(process.env.API_PORT || process.env.PORT || 3000),
+  // Bind to loopback by default: this is a single-user self-hosted tool, and
+  // binding 0.0.0.0 with an empty API_KEY would expose every route.
+  host,
+  isLoopback: ['127.0.0.1', 'localhost', '::1'].includes(host),
   apiKey: process.env.API_KEY || '',
+  // Default to the Vite dev origin rather than "*", so a stray browser tab
+  // can't drive the API when no key is configured.
+  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   activeProviders: (process.env.PROVIDERS || 'local')
     .split(',')
     .map((s) => s.trim())

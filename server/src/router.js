@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { Router } from 'express'
 import config from './config.js'
 import { getProvider, listProviders } from './providers/index.js'
@@ -59,6 +60,9 @@ export function createRouter() {
     const to = req.query.to || addDays(from, 7)
     if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) {
       throw badRequest('"from" and "to" must be valid ISO 8601 date-times.')
+    }
+    if (new Date(to) <= new Date(from)) {
+      throw badRequest('"to" must be after "from".')
     }
     const events = await provider.getEvents({
       calendarId: req.query.calendarId || undefined,
@@ -157,7 +161,7 @@ function addDays(iso, days) {
   return d.toISOString()
 }
 
+/** OAuth `state` is a CSRF defence — it must always be cryptographically random. */
 function cryptoRandom() {
-  const { randomUUID } = globalThis.crypto || {}
-  return randomUUID ? randomUUID() : Math.random().toString(36).slice(2)
+  return crypto.randomUUID()
 }

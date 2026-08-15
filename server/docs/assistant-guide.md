@@ -17,9 +17,11 @@ You can:
 
 ## Conventions
 
-- Base URL: `http://localhost:3000` (configurable)
+- Base URL: `http://localhost:3000` (configurable via `API_PORT`). The server
+  binds loopback only by default, so it is reachable from the same machine.
 - If an `API_KEY` is configured, send it as `x-api-key` or
-  `Authorization: Bearer <key>` on every request.
+  `Authorization: Bearer <key>` on every request. `/health` never requires it,
+  so you can always check liveness first.
 - All times are **ISO 8601 with timezone** (e.g. `2026-08-17T09:00:00Z`).
   Always convert the user's local time to UTC before calling the API, and
   convert results back when reporting to the user.
@@ -118,6 +120,42 @@ slot. Never say "booked" unless the API returned `"booked": true`.
   full event body. Preserve `title` and attendees unless the user asks to change them.
 - **Cancel:** `DELETE /api/events/:eventId?provider=google`. Confirm with the user
   before deleting; report the result.
+
+## Recurring events
+
+Recurring events are returned **already expanded**: one entry per occurrence in
+the window you asked for, never a single "master" carrying a repeat rule. So you
+can treat every event you read as a concrete block of time and do no recurrence
+maths yourself.
+
+An occurrence carries two extra fields:
+
+- `recurringEventId` — the id of the series it belongs to
+- `originalStart` — that occurrence's own start time
+
+Its `id` is unique per occurrence (`<seriesId>_<timestamp>`), so occurrences can
+be told apart.
+
+**When booking**, you may pass a `recurrence` rule to create a repeating event:
+
+```json
+{
+  "provider": "local",
+  "title": "Weekly standup",
+  "start": "2031-09-01T09:00:00Z",
+  "end": "2031-09-01T09:30:00Z",
+  "recurrence": "RRULE:FREQ=WEEKLY;COUNT=10"
+}
+```
+
+An invalid rule is rejected with `bad_request`, so a malformed rule never
+silently produces a one-off event.
+
+⚠ **Editing and deleting a series is not yet supported.** `PATCH` and `DELETE`
+act on a single id, and what that means differs by provider — for Google it
+affects one occurrence, for CalDAV it removes the whole series. **Before
+changing or cancelling anything with a `recurringEventId`, tell the user it is
+part of a repeating series and ask what they want**, rather than guessing.
 
 ## Error handling
 

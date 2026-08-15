@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import CalendarProvider from './base.js'
 import { dataPath, readJson, writeJson } from '../lib/fs-store.js'
+import { expandRecurring } from '../lib/recurrence.js'
 import { badRequest, notFound } from '../lib/errors.js'
 
 const STORE_FILE = dataPath('local-calendar.json')
@@ -43,8 +44,14 @@ export default class LocalProvider extends CalendarProvider {
     const { events } = this.load()
     const fromMs = new Date(from).getTime()
     const toMs = new Date(to).getTime()
-    return events
-      .filter((e) => (!calendarId || e.calendarId === calendarId))
+    const scoped = events.filter((e) => !calendarId || e.calendarId === calendarId)
+
+    // Expand recurring events BEFORE the window filter: a series that started
+    // before `from` must still contribute its occurrences inside the window.
+    // Filtering first would drop the master and leave every occurrence free.
+    const expanded = expandRecurring(scoped, { from, to })
+
+    return expanded
       .filter((e) => new Date(e.end).getTime() > fromMs && new Date(e.start).getTime() < toMs)
       .map((e) => ({ ...e, provider: this.id }))
   }
