@@ -263,9 +263,28 @@ CALDAV_PASSWORD=...
 After configuring, pick the provider in the UI sidebar (or target it directly in
 the API) and it will show up as `ready` in `/health`.
 
-> **Note:** OAuth tokens are stored as JSON files under `server/data/` and are
-> git-ignored. This is convenient for a self-hosted single-user setup but is
-> **not** production-grade multi-user auth.
+> **Note:** OAuth tokens are stored as JSON files under `server/data/`, written
+> with owner-only permissions (`0600`) and git-ignored. This is convenient for a
+> self-hosted single-user setup but is **not** production-grade multi-user auth.
+
+---
+
+## Security posture
+
+This is a **single-user, self-hosted** tool, and the defaults are chosen to match:
+
+- **Binds to `127.0.0.1`.** Nothing outside the machine can reach the API unless
+  you deliberately set `HOST`.
+- **CORS defaults to the UI origin** (`http://localhost:5173`), not `*`.
+- **`API_KEY` is compared in constant time**, so a wrong key leaks nothing through
+  response timing. When unset, `/api/*` is open — which is safe only because of
+  the loopback bind.
+- **OAuth tokens are written `0600`** under the git-ignored `server/data/`.
+- The server **warns loudly at startup** if you bind a non-loopback interface
+  without an API key, or combine that with `CORS_ORIGIN=*`.
+
+If you expose this beyond localhost, set `API_KEY` **and** a specific
+`CORS_ORIGIN`, and put it behind TLS.
 
 ---
 
@@ -405,9 +424,11 @@ All configuration is environment-driven (`server/.env`, see
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `3000` | API port |
+| `API_PORT` | `3000` | API port. Takes precedence over `PORT` |
+| `PORT` | `3000` | API port (fallback; `API_PORT` wins) |
+| `HOST` | `127.0.0.1` | Interface to bind. Loopback by default |
 | `API_KEY` | *(empty)* | When set, required on every `/api/*` request |
-| `CORS_ORIGIN` | `*` | Allowed browser origin |
+| `CORS_ORIGIN` | `http://localhost:5173` | Allowed browser origin |
 | `PROVIDERS` | `local` | Comma-separated active providers |
 | `GOOGLE_ENABLED` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | — | Google Calendar OAuth |
 | `OUTLOOK_ENABLED` / `OUTLOOK_TENANT` / `OUTLOOK_CLIENT_ID` / `OUTLOOK_CLIENT_SECRET` / `OUTLOOK_REDIRECT_URI` | — | Microsoft 365 OAuth |
@@ -429,16 +450,39 @@ ai-calendar/
 │   └── vite.config.js        # dev proxy: /api, /health → localhost:3000
 └── server/                   # @ai-calendar/server — Express interrogation API (port 3000)
     ├── src/
-    │   ├── server.js         # Express app + CORS
+    │   ├── app.js            # builds the Express app (CORS, errors) — no listen()
+    │   ├── server.js         # binds the port + startup safety warnings
     │   ├── router.js         # all /api routes
     │   ├── config.js         # env-driven config
     │   ├── seed.js           # reset local calendar to empty
     │   ├── providers/        # base.js (contract) + local, google, outlook, caldav, index.js
-    │   ├── auth/             # OAuth token storage (dev-grade JSON)
+    │   ├── auth/             # OAuth token storage (0600 JSON)
     │   └── lib/              # errors, validate, util (availability engine), fs-store
+    ├── test/                 # node:test suites (util, validate, providers, HTTP API)
     ├── docs/assistant-guide.md  # field manual for AI assistants
     └── data/                 # git-ignored runtime data (local-calendar.json, OAuth tokens)
 ```
+
+`app.js` is split from `server.js` so tests can drive the real app over an
+ephemeral port without starting the production listener.
+
+---
+
+## Tests
+
+```bash
+npm test              # run everything
+npm run test:coverage # with a coverage report
+```
+
+The suite uses Node's built-in `node:test` — **no test-framework dependency**.
+It covers the availability engine's edge cases (enclosed, touching, zero-length
+and DST-crossing intervals), request validation, the local provider's full CRUD
+lifecycle, the Google/Outlook/CalDAV adapters against a stubbed transport, and
+the HTTP layer end to end (auth, CORS, error envelope, book → conflict → delete).
+
+One property is asserted directly, because the whole product rests on it:
+**every slot `availability` offers must be reported clear by `conflicts`.**
 
 ---
 
@@ -462,6 +506,8 @@ availability and conflict checks can never disagree.
 | Command | Description |
 | --- | --- |
 | `npm run dev` | Run the API (:3000) and UI (:5173) together |
+| `npm test` | Run the server test suite (`node:test`, no extra dependencies) |
+| `npm run test:coverage` | Run the tests with a coverage report |
 | `npm run build` | Build the client for production (outputs `client/dist/`) |
 | `npm run lint` | Lint both workspaces (oxlint) |
 | `npm run seed` | Reset the local calendar to an empty state |

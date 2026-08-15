@@ -17,9 +17,11 @@ You can:
 
 ## Conventions
 
-- Base URL: `http://localhost:3000` (configurable)
+- Base URL: `http://localhost:3000` (configurable via `API_PORT`). The server
+  binds loopback only by default, so it is reachable from the same machine.
 - If an `API_KEY` is configured, send it as `x-api-key` or
-  `Authorization: Bearer <key>` on every request.
+  `Authorization: Bearer <key>` on every request. `/health` never requires it,
+  so you can always check liveness first.
 - All times are **ISO 8601 with timezone** (e.g. `2026-08-17T09:00:00Z`).
   Always convert the user's local time to UTC before calling the API, and
   convert results back when reporting to the user.
