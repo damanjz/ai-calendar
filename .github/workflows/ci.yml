@@ -28,12 +28,14 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      # Use `npm install`, not `npm ci`: npm ci can skip optional native bindings
-      # even when they're in the lockfile (npm/cli#4828), which breaks oxlint's
-      # platform binary on Linux. `npm install` resolves them correctly and, with
-      # an up-to-date lockfile, does not mutate it.
+      # npm/cli#4828: npm drops optional native bindings (here oxlint's Linux
+      # binary) when installing from a lockfile resolved on another platform.
+      # The reliable fix, per npm's own error message, is a fresh install with
+      # no lockfile/node_modules to inherit the broken optional-dep state.
       - name: Install (workspaces)
-        run: npm install --no-audit --no-fund
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
@@ -52,6 +54,6 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      # audit reads the lockfile; no full install needed.
+      # audit reads the committed lockfile directly — no install needed.
       - name: npm audit (production)
         run: npm audit --omit=dev --audit-level=moderate
