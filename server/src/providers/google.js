@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import CalendarProvider from './base.js'
 import { loadTokens, saveTokens } from '../auth/store.js'
-import { badRequest, providerError } from '../lib/errors.js'
+import { ApiError, badRequest, providerError } from '../lib/errors.js'
 
 export default class GoogleProvider extends CalendarProvider {
   constructor(cfg) {
@@ -43,31 +43,48 @@ export default class GoogleProvider extends CalendarProvider {
     return tokens
   }
 
-  async calendar() {
-    const oauth = this.oauth()
-    oauth.setCredentials(loadTokens('google'))
-    return google.calendar({ version: 'v3', auth: oauth })
-  }
-
-  async refreshIfNeeded() {
+  /**
+   * Returns an authenticated Calendar client, refreshing the access token first
+   * when it has expired.
+   *
+   * NOTE: this is deliberately the ONLY way to reach the API. It is async, so
+   * every call site must `await` it before touching `.events` / `.calendarList`
+   * — `await this.client().events.list()` would read `.events` off the pending
+   * Promise (undefined) and throw before the await ever resolves.
+   */
+  async client() {
     const oauth = this.oauth()
     const tokens = loadTokens('google')
+    if (!tokens) {
+      throw badRequest('Google Calendar is not authenticated yet. Complete the OAuth flow at /api/auth/google first.')
+    }
     oauth.setCredentials(tokens)
     if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
       const { credentials } = await oauth.refreshAccessToken()
       saveTokens('google', credentials)
       oauth.setCredentials(credentials)
     }
+    return google.calendar({ version: 'v3', auth: oauth })
   }
 
   async getCalendars() {
-    await this.refreshIfNeeded()
-    const res = await this.calendar().calendarList.list()
-    return res.data.items.map((c) => ({
-      id: c.id,
-      name: c.summary || c.id,
-      primary: Boolean(c.primary),
-    }))
+    try {
+      const calendar = await this.client()
+      const res = await calendar.calendarList.list()
+      return (res.data.items || []).map((c) => ({
+        id: c.id,
+        name: c.summary || c.id,
+        primary: Boolean(c.primary),
+      }))
+    } catch (err) {
+      throw this.wrap(err, 'list calendars')
+    }
+  }
+
+  /** Re-throws ApiErrors untouched; wraps anything else as a provider_error. */
+  wrap(err, action) {
+    if (err instanceof ApiError) return err
+    return providerError(`Google Calendar ${action} failed: ${err.message}`, { cause: err.code })
   }
 
   normalize(item, calendarId) {
@@ -102,55 +119,55 @@ export default class GoogleProvider extends CalendarProvider {
   }
 
   async getEvents({ calendarId, from, to }) {
-    await this.refreshIfNeeded()
     try {
-      const res = await this.calendar().events.list({
-        calendarId,
+      const calendar = await this.client()
+      const res = await calendar.events.list({
+        calendarId: calendarId || 'primary',
         timeMin: new Date(from).toISOString(),
         timeMax: new Date(to).toISOString(),
         singleEvents: true,
         orderBy: 'startTime',
       })
-      return res.data.items.map((item) => this.normalize(item, calendarId))
+      return (res.data.items || []).map((item) => this.normalize(item, calendarId))
     } catch (err) {
-      throw providerError(`Google Calendar request failed: ${err.message}`, { cause: err.code })
+      throw this.wrap(err, 'request')
     }
   }
 
   async createEvent({ calendarId, event }) {
-    await this.refreshIfNeeded()
     try {
-      const res = await this.calendar().events.insert({
-        calendarId,
+      const calendar = await this.client()
+      const res = await calendar.events.insert({
+        calendarId: calendarId || 'primary',
         requestBody: this.toGoogleEvent(event),
       })
       return this.normalize(res.data, calendarId)
     } catch (err) {
-      throw providerError(`Google Calendar create failed: ${err.message}`, { cause: err.code })
+      throw this.wrap(err, 'create')
     }
   }
 
   async updateEvent({ calendarId, eventId, event }) {
-    await this.refreshIfNeeded()
     try {
-      const res = await this.calendar().events.update({
-        calendarId,
+      const calendar = await this.client()
+      const res = await calendar.events.update({
+        calendarId: calendarId || 'primary',
         eventId,
         requestBody: this.toGoogleEvent(event),
       })
       return this.normalize(res.data, calendarId)
     } catch (err) {
-      throw providerError(`Google Calendar update failed: ${err.message}`, { cause: err.code })
+      throw this.wrap(err, 'update')
     }
   }
 
   async deleteEvent({ calendarId, eventId }) {
-    await this.refreshIfNeeded()
     try {
-      await this.calendar().events.delete({ calendarId, eventId })
+      const calendar = await this.client()
+      await calendar.events.delete({ calendarId: calendarId || 'primary', eventId })
       return { deleted: true }
     } catch (err) {
-      throw providerError(`Google Calendar delete failed: ${err.message}`, { cause: err.code })
+      throw this.wrap(err, 'delete')
     }
   }
 }

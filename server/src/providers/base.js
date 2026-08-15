@@ -34,23 +34,23 @@ export default class CalendarProvider {
     throw new Error('getCalendars not implemented')
   }
 
-  /** Returns normalized events within [from, to). */
-  async getEvents({ _calendarId, _from, _to }) {
+  /** Returns normalized events within [from, to). @param {{calendarId?, from, to}} _args */
+  async getEvents(_args) {
     throw new Error('getEvents not implemented')
   }
 
-  /** Creates an event; returns the normalized created event. */
-  async createEvent({ _calendarId, _event }) {
+  /** Creates an event; returns the normalized created event. @param {{calendarId?, event}} _args */
+  async createEvent(_args) {
     throw new Error('createEvent not implemented')
   }
 
-  /** Updates an event; returns the normalized updated event. */
-  async updateEvent({ _calendarId, _eventId, _event }) {
+  /** Updates an event; returns the normalized updated event. @param {{calendarId?, eventId, event}} _args */
+  async updateEvent(_args) {
     throw new Error('updateEvent not implemented')
   }
 
-  /** Deletes an event. */
-  async deleteEvent({ _calendarId, _eventId }) {
+  /** Deletes an event. @param {{calendarId?, eventId}} _args */
+  async deleteEvent(_args) {
     throw new Error('deleteEvent not implemented')
   }
 
