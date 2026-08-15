@@ -14,15 +14,16 @@ Every artifact and its exact path, so nothing is lost or deleted by accident. Sn
 
 ## Code (the repo)
 
-`C:\Demon Projects\ai-calendar\` — git repo at `C:\Demon Projects` (branch `master`, **0 commits**; `ai-calendar/` is untracked).
+`G:\Claude Projects\ai-calendar\` — **published** at https://github.com/damanjz/ai-calendar (public, MIT). Branch `master`, 9 commits (PR #1 merged, merge commit `6d6e3b3`).
 
 | Path | What |
 |------|------|
-| `package.json` | root — workspaces (`client`/`server`) + scripts (`dev`, `build`, `lint`, `seed`, `start`) |
-| `README.md` | root usage docs (incl. "How to use") |
-| `dev.log` | root dev output (started via `npm run dev`) |
+| `package.json` | root — workspaces (`client`/`server`) + scripts (`dev`, `test`, `test:coverage`, `build`, `lint`, `seed`, `start`) |
+| `README.md` | root usage docs (incl. "How to use", Tests, Security posture, How recurring events work) |
+| `LICENSE` | MIT |
 | `client\` | `@ai-calendar/client` — React + Vite UI (port 5173) |
 | `server\` | `@ai-calendar/server` — Express interrogation API (port 3000) |
+| `vault\` | **these notes** — they live in the repo and travel with the code |
 
 ## Client (`client\`)
 
@@ -40,22 +41,24 @@ Every artifact and its exact path, so nothing is lost or deleted by accident. Sn
 
 | Path | What |
 |------|------|
-| `src\server.js` | Express entry + CORS |
+| `src\app.js` | builds the Express app (CORS + error middleware) — **no `listen()`**, so tests can import it |
+| `src\server.js` | binds the port + startup safety warnings |
 | `src\router.js` | all API + auth routes |
-| `src\config.js` | env-driven config |
+| `src\config.js` | env-driven config (`API_PORT` > `PORT`; `HOST` defaults to loopback) |
 | `src\seed.js` | resets local calendar to empty state |
 | `src\providers\` | `base.js` (contract), `local.js`, `google.js`, `outlook.js`, `caldav.js`, `index.js` (registry) |
-| `src\auth\store.js` | OAuth token JSON storage |
-| `src\lib\` | `errors.js`, `util.js`, `validate.js`, `fs-store.js` |
-| `docs\assistant-guide.md` | AI interrogation workflow docs |
+| `src\auth\store.js` | OAuth token storage, written `0600` |
+| `src\lib\` | `errors.js`, `util.js` (availability engine + `safeKeyEquals`), **`recurrence.js`** (RRULE expansion), `validate.js`, `fs-store.js` |
+| `test\` | 118 tests — `util`, `validate`, `providers`, `google-provider`, `remote-providers`, `recurrence`, `recurrence-providers`, `api` |
+| `docs\assistant-guide.md` | AI interrogation workflow docs (incl. the recurring-events section) |
 | `server\README.md` | server docs |
 
 ## User data / runtime (do not lose)
 
 | Path | What |
 |------|------|
-| `server\data\local-calendar.json` | **the `local` provider's data** — calendars `work`/`personal`, events array (currently 0). Live state. |
-| `server\data\tokens-*.json` | OAuth tokens (created when live Google/Outlook connected — dev-grade storage) |
+| `server\data\local-calendar.json` | **the `local` provider's data** — calendars `work`/`personal`, events array (currently 0). Live state. Git-ignored. |
+| `server\data\tokens-*.json` | OAuth tokens, written `0600` (created when live Google/Outlook connected — dev-grade storage). Git-ignored. |
 
 ## Config / secrets
 
@@ -71,13 +74,17 @@ Every artifact and its exact path, so nothing is lost or deleted by accident. Sn
 
 ## Vault (notes)
 
-`C:\Users\daman\ZephyrVault\Projects\AI Calendar\` — [[AI Calendar]] (index) · [[Status]] · [[Decisions]] · [[Changelog]] · [[Architecture]] · this note.
+**Canonical: `vault\` in this repo** — [[AI Calendar]] (index) · [[Status]] · [[Decisions]] · [[Changelog]] · [[Architecture]] · this note. They travel with the code, so a clone carries its own context.
+
+> [!warning] Duplicate note set
+> A parallel copy exists at `C:\Users\daman\Documents\ObsidianVault\Projects\AI Calendar\` (created 2026-08-15 before the in-repo `vault/` was known). **The in-repo copy is canonical**; the ObsidianVault one should be reduced to a pointer, or the two will rot apart.
 
 ## Notes
 
-- **Git state:** repo at `C:\Demon Projects` has **zero commits**; `ai-calendar/` untracked. Commit/push only on Daman's word (standing git rule).
-- **Run:** `npm run dev` from `ai-calendar\` → API :3000 + UI :5173.
+- **Git state:** public at https://github.com/damanjz/ai-calendar, `master` = 9 commits (PR #1 merged). Commit/push only on Daman's word (standing git rule).
+- **Run:** `API_PORT=3000 npm run dev` from `ai-calendar\` → API :3000 + UI :5173. Plain `PORT` can collide with the UI port.
+- **Test:** `npm test` (118) · `npm run test:coverage` (90.7%).
 - **Reset data:** `npm run seed` wipes events (calendars `work`/`personal` kept).
-- **Not yet configured:** Google/Outlook OAuth and CalDAV creds (only `local` provider active).
+- **Not yet configured:** Google/Outlook OAuth and CalDAV creds (only `local` provider active) — and **none of them has ever run against a real account**.
 
 Back to [[AI Calendar]].

@@ -10,7 +10,7 @@ updated: 2026-08-15
 
 # Architecture — AI Calendar
 
-> How it's built. Repo: `C:\Demon Projects\ai-calendar` (npm workspaces: `client/` + `server/`).
+> How it's built. Repo: `G:\Claude Projects\ai-calendar` (npm workspaces: `client/` + `server/`) · https://github.com/damanjz/ai-calendar
 
 ## Shape
 
@@ -18,29 +18,53 @@ updated: 2026-08-15
 ai-calendar/
 ├─ package.json            # workspaces + concurrently scripts
 ├─ client/                 # @ai-calendar/client — React + Vite UI (port 5173)
-└─ server/                 # @ai-calendar/server — Node/Express API (port 3000)
+├─ server/                 # @ai-calendar/server — Node/Express API (port 3000)
+└─ vault/                  # these project notes (travel with the code)
 ```
 
-Dev run: root `npm run dev` starts both via `concurrently`. Vite dev proxy forwards `/api` and `/health` to `http://localhost:3000`, so the UI and any browser-based client talk one origin.
+Dev run: root `npm run dev` starts both via `concurrently`. Vite dev proxy forwards `/api` and `/health` to the API, so the UI and any browser-based client talk one origin. ⚠ Set **`API_PORT`**, not `PORT`.
 
 ## Server (interrogation API)
 
 | Piece | Path | Role |
 |-------|------|------|
-| Entry | `server/src/server.js` | Express app + CORS middleware |
+| App | `server/src/app.js` | builds the Express app (CORS, error middleware) — **no `listen()`** |
+| Entry | `server/src/server.js` | binds the port + startup safety warnings |
 | Routes | `server/src/router.js` | All `/api/*` + `/health` + auth routes |
 | Providers | `server/src/providers/` | `base.js` (contract), `local.js`, `google.js`, `outlook.js`, `caldav.js`, `index.js` (registry) |
-| Auth | `server/src/auth/store.js` | OAuth token JSON storage (dev-grade) |
-| Lib | `server/src/lib/` | `errors.js`, `util.js` (incl. `findFreeSlots`), `validate.js`, `fs-store.js` |
+| Auth | `server/src/auth/store.js` | OAuth token JSON storage, written `0600` |
+| Lib | `server/src/lib/` | `errors.js`, `util.js` (incl. `findFreeSlots`, `safeKeyEquals`), **`recurrence.js`**, `validate.js`, `fs-store.js` |
 | Config | `server/src/config.js` | env-driven (`.env.example` template) |
 | Seed | `server/src/seed.js` | resets local calendar to empty state |
-| Data | `server/data/local-calendar.json` | `local` provider store |
+| Tests | `server/test/` | `util`, `validate`, `providers`, `google-provider`, `remote-providers`, `recurrence`, `recurrence-providers`, `api` |
+| Data | `server/data/local-calendar.json` | `local` provider store (git-ignored) |
+
+`app.js` is split from `server.js` so tests can drive the **real** app on an ephemeral port without starting the production listener.
 
 Endpoints: `/health` · `/api/providers` · `/api/calendars` · `/api/events` · `/api/availability` · `/api/conflicts` · `/api/book` · `PATCH`/`DELETE /api/events/:eventId` · `/api/auth/:provider` + `/callback`.
 
-Event model (normalized): `{ id, provider, calendarId, title, description, location, start, end, allDay, attendees }` — ISO 8601 UTC.
+Event model (normalized): `{ id, provider, calendarId, title, description, location, start, end, allDay, attendees }` — ISO 8601 UTC. Expanded recurrence instances add `recurringEventId` + `originalStart`; a write may carry `recurrence`.
 
 Flow for assistants (see `server/docs/assistant-guide.md`): health → providers → calendars → events window → availability → conflicts → book → patch/delete.
+
+## Recurrence (why it's shaped this way)
+
+`findFreeSlots` is **purely interval-based** — it reads `start`/`end` and nothing else. A recurring master carrying an RRULE would therefore block only its first occurrence, and a series beginning before the window is removed by the window filter entirely, so every occurrence reads as free.
+
+Expansion happens **inside each provider's `getEvents`**, not in a shared wrapper: `getEvents` has three call sites (`base.js` availability, `router.js` raw read, `router.js` conflicts), so a wrapper would need applying three times and any future call site would silently bypass it.
+
+| Provider | Expansion |
+|---|---|
+| `google` | `singleEvents: true` — Google expands server-side |
+| `outlook` | `/me/calendarView` — Graph expands. The plain `/events` collection **ignores the date range** and returns series masters |
+| `caldav` | `node-ical` parses the RRULE but never expands; occurrences generated with `rrule`, honouring `EXDATE` + `RECURRENCE-ID` |
+| `local` | expanded in-process from the stored rule, **before** the window filter |
+
+Capped at 1000 instances per series, stopping *at* the cap rather than materialising then slicing.
+
+## Security posture
+
+Single-user, self-hosted — defaults chosen to match: binds `127.0.0.1`; CORS defaults to the UI origin (not `*`); `API_KEY` compared in constant time; OAuth tokens `0600`; startup warns if bound off-loopback without a key.
 
 ## Client (UI)
 
@@ -66,8 +90,13 @@ Key behaviors:
 5. `local` provider reads/writes `server/data/local-calendar.json` on each request (no restart needed).
 
 ## Verification (2026-08-15)
+- `npm test` — **118 tests, 0 failures**; `npm run test:coverage` — **90.7% lines** (`util.js` and `local.js` at 100%).
 - `npm run lint` — 0/0 both workspaces.
 - `npm run build` — passes (client).
 - E2E through proxy — book → PATCH reschedule → DELETE all succeeded; `/api/availability` returns slots; data reset to 0 events.
+- Recurrence E2E in a browser — booked a weekly series, confirmed the **third** occurrence was reported busy and withheld from availability.
+
+> [!warning] What is NOT verified
+> Google, Outlook and CalDAV have **never run against real accounts**. They pass against *stubbed transports*, which proves our request shapes and normalisation — not the live APIs. The Outlook `/calendarView` switch is reasoned from Graph's documented behaviour and is the highest-risk unexecuted change.
 
 Back to [[AI Calendar]].
