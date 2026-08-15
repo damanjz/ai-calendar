@@ -11,8 +11,8 @@
     "start": "node src/server.js",
     "seed": "node src/seed.js",
     "verify:live": "node --env-file=.env scripts/verify-live-provider.mjs",
-    "test": "node --test \"test/**/*.test.js\"",
-    "test:coverage": "node --test --experimental-test-coverage \"test/**/*.test.js\"",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
     "lint": "oxlint"
   },
   "dependencies": {
