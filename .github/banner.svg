@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" fill="none" role="img" aria-label="AI Calendar — the open-source calendar your AI assistant can manage">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0e1222"/>
+      <stop offset="1" stop-color="#161b34"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#6d86fb"/>
+      <stop offset="1" stop-color="#4f6ef7"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#4f6ef7" stop-opacity="0"/>
+      <stop offset="1" stop-color="#4f6ef7" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+  </defs>
+
+  <!-- backdrop -->
+  <rect width="1280" height="360" rx="20" fill="url(#bg)"/>
+  <!-- ambient glow -->
+  <ellipse cx="1050" cy="120" rx="240" ry="200" fill="#4f6ef7" opacity="0.22" filter="url(#soft)"/>
+  <ellipse cx="180" cy="330" rx="220" ry="160" fill="#6d86fb" opacity="0.12" filter="url(#soft)"/>
+
+  <!-- faint dotted grid texture -->
+  <g fill="#ffffff" opacity="0.05">
+    <circle cx="60" cy="60" r="2"/><circle cx="120" cy="60" r="2"/><circle cx="180" cy="60" r="2"/>
+    <circle cx="60" cy="120" r="2"/><circle cx="120" cy="120" r="2"/>
+    <circle cx="60" cy="180" r="2"/>
+  </g>
+
+  <!-- ============ left: wordmark + copy ============ -->
+  <g transform="translate(72, 96)">
+    <!-- mini calendar mark -->
+    <g transform="translate(0,4)">
+      <rect x="0" y="6" width="52" height="46" rx="12" fill="url(#accent)"/>
+      <path d="M0 18A12 12 0 0 1 12 6h28a12 12 0 0 1 12 12v3H0z" fill="#3f51d4"/>
+      <rect x="14" y="0" width="5" height="13" rx="2.5" fill="#c7d0f9"/>
+      <rect x="33" y="0" width="5" height="13" rx="2.5" fill="#c7d0f9"/>
+      <rect x="9" y="30" width="8" height="6" rx="2" fill="#ffffff" opacity="0.5"/>
+      <rect x="35" y="40" width="8" height="6" rx="2" fill="#ffffff" opacity="0.5"/>
+      <rect x="30" y="27" width="14" height="12" rx="3" fill="#ffffff"/>
+      <path d="M33.4 32.6l2.5 2.5 4-4.4" stroke="#4f6ef7" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </g>
+
+    <text x="70" y="30" font-family="'Segoe UI', system-ui, sans-serif" font-size="42" font-weight="800" fill="#ffffff" letter-spacing="-1">AI Calendar</text>
+    <text x="72" y="62" font-family="'Segoe UI', system-ui, sans-serif" font-size="18" font-weight="500" fill="#9fb0e8" letter-spacing="0.2">The calendar your AI assistant can actually manage.</text>
+
+    <!-- capability chips -->
+    <g font-family="'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="600" transform="translate(0,96)">
+      <g>
+        <rect x="0" y="0" width="96" height="28" rx="14" fill="#ffffff" opacity="0.08"/>
+        <text x="48" y="19" text-anchor="middle" fill="#c9d4f7">read · book</text>
+      </g>
+      <g transform="translate(108,0)">
+        <rect x="0" y="0" width="128" height="28" rx="14" fill="#ffffff" opacity="0.08"/>
+        <text x="64" y="19" text-anchor="middle" fill="#c9d4f7">recurring · scope</text>
+      </g>
+      <g transform="translate(248,0)">
+        <rect x="0" y="0" width="150" height="28" rx="14" fill="#ffffff" opacity="0.08"/>
+        <text x="75" y="19" text-anchor="middle" fill="#c9d4f7">conflict-aware slots</text>
+      </g>
+    </g>
+
+    <!-- provider row -->
+    <g font-family="'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="500" fill="#7f8fc4" transform="translate(0,150)">
+      <text x="0" y="0">Google · Microsoft 365 · CalDAV · local — one normalized API</text>
+    </g>
+  </g>
+
+  <!-- ============ right: the pipeline (UI -> API -> providers) ============ -->
+  <g transform="translate(690, 74)" font-family="'Segoe UI', system-ui, sans-serif">
+    <!-- UI node -->
+    <g transform="translate(0,4)">
+      <rect width="134" height="72" rx="14" fill="#ffffff" opacity="0.06"/>
+      <rect width="134" height="72" rx="14" fill="none" stroke="#4f6ef7" stroke-opacity="0.4"/>
+      <text x="18" y="32" font-size="16" font-weight="700" fill="#ffffff">UI</text>
+      <text x="18" y="52" font-size="12" fill="#9fb0e8">React · 4 views</text>
+    </g>
+    <!-- arrow -->
+    <path d="M140 40 H172" stroke="url(#fade)" stroke-width="2.5"/>
+    <path d="M168 35 l8 5 -8 5" fill="#4f6ef7"/>
+
+    <!-- API node (hero) -->
+    <g transform="translate(182,-6)">
+      <rect width="216" height="92" rx="16" fill="url(#accent)"/>
+      <text x="22" y="36" font-size="17" font-weight="800" fill="#ffffff">Interrogation API</text>
+      <text x="22" y="60" font-size="12.5" fill="#e6ebff">search · reminders · ics</text>
+      <text x="22" y="79" font-size="12.5" fill="#e6ebff">Express · authoritative</text>
+    </g>
+    <!-- arrow -->
+    <path d="M404 40 H436" stroke="url(#fade)" stroke-width="2.5"/>
+    <path d="M432 35 l8 5 -8 5" fill="#4f6ef7"/>
+
+    <!-- providers node -->
+    <g transform="translate(446,4)">
+      <rect width="126" height="72" rx="14" fill="#ffffff" opacity="0.06"/>
+      <rect width="126" height="72" rx="14" fill="none" stroke="#4f6ef7" stroke-opacity="0.4"/>
+      <g font-size="12.5" fill="#c9d4f7">
+        <circle cx="20" cy="19" r="3" fill="#6d86fb"/><text x="32" y="23">local</text>
+        <circle cx="20" cy="37" r="3" fill="#6d86fb"/><text x="32" y="41">google</text>
+        <circle cx="20" cy="55" r="3" fill="#6d86fb"/><text x="32" y="59">outlook</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- stat strip -->
+  <g transform="translate(690, 252)" font-family="'Segoe UI', system-ui, sans-serif">
+    <g>
+      <text x="0" y="0" font-size="26" font-weight="800" fill="#ffffff">163</text>
+      <text x="0" y="20" font-size="12" fill="#7f8fc4">tests passing</text>
+    </g>
+    <g transform="translate(120,0)">
+      <text x="0" y="0" font-size="26" font-weight="800" fill="#ffffff">91%</text>
+      <text x="0" y="20" font-size="12" fill="#7f8fc4">coverage</text>
+    </g>
+    <g transform="translate(240,0)">
+      <text x="0" y="0" font-size="26" font-weight="800" fill="#ffffff">0</text>
+      <text x="0" y="20" font-size="12" fill="#7f8fc4">vulnerabilities</text>
+    </g>
+    <g transform="translate(400,0)">
+      <text x="0" y="0" font-size="26" font-weight="800" fill="#ffffff">MIT</text>
+      <text x="0" y="20" font-size="12" fill="#7f8fc4">open source</text>
+    </g>
+  </g>
+</svg>

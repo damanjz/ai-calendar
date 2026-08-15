@@ -1,24 +1,14 @@
 <div align="center">
 
-# 📅 AI Calendar
+<img src=".github/banner.svg" alt="AI Calendar — the open-source calendar your AI assistant can actually manage" width="100%">
 
-**The open-source calendar your AI assistant can actually manage.**
+<br><br>
 
 > A full-featured calendar app — Month / Week / Day / Agenda views, drag & drop
 > rescheduling, multi-calendar with colors — backed by a **provider-agnostic
 > interrogation API** so any AI assistant (or human, or script) can read
 > availability, check conflicts, and book appointments across
 > **Google Calendar · Microsoft 365 · CalDAV · local files**.
-
-```
-┌─────────────┐      ┌──────────────────────────┐      ┌───────────────────┐
-│  🖥  UI      │      │  🤖  Interrogation API   │      │  🗄  Providers     │
-│  (React)    │ ───► │  (Express)               │ ───► │  local            │
-│             │      │  read · search · book    │      │  google           │
-│  drag &     │      │  reschedule · reminders  │      │  outlook          │
-│  drop       │      │  import · export · ics   │      │  caldav           │
-└─────────────┘      └──────────────────────────┘      └───────────────────┘
-```
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Node](https://img.shields.io/badge/Node-%3E%3D20-339933)
